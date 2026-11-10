@@ -1,51 +1,62 @@
 # Vidora
 
-An original, full-featured video-sharing web app with a desktop **and** mobile UI, built from scratch in plain HTML, CSS and JavaScript (no frameworks, no build step).
+A video-sharing web app built with **Next.js 16, React 19 and TypeScript**, with a desktop layout and a phone layout. It runs entirely in the browser: there's no backend or account, and everything you create is stored locally.
 
-> Vidora is an independent project. It is not affiliated with, and does not use code, logos or assets from, any existing video platform. The layout follows familiar conventions for this kind of app, and all code, icons, branding and artwork are original.
+The interface follows the conventions people know from large video platforms and uses the same open building blocks: [Material Symbols](https://fonts.google.com/icons) icons and the [Roboto](https://fonts.google.com/specimen/Roboto) typeface. The name, logo, code and Shorts glyph are original.
 
 ## Run it
 
 ```bash
-python3 -m http.server 8000   # or any static file server
-# open http://localhost:8000
+npm install
+npm run dev        # http://localhost:3000
+# or: npm run build && npm start
 ```
 
-Everything is stored locally in your browser: app data in `localStorage`, uploaded video files in IndexedDB. Use **Settings → Reset demo data** to start over.
+Checks: `npm run lint`, `npm run typecheck`.
 
-## Features
+## What works
 
-| Area | What you can do |
-| --- | --- |
-| **Home** | Category chips, video grid, Shorts shelf, Stories row, hover actions (Watch later / queue), "Not interested" |
-| **Watch** | Custom player (play/pause, seek with chapter preview, volume, speed, quality, captions, loop, theater, miniplayer, fullscreen, keyboard shortcuts), like/dislike, subscribe + notification bell, Share (with timestamp/embed), Download, Thanks, Clip, Save to playlist, expandable description with clickable timestamps and chapters, comments (sort, reply, like, edit, delete, pin, heart), Up next with autoplay and queue |
-| **Shorts** | Vertical snap-scrolling feed, auto play/pause, like/dislike/comment/share, subscribe |
-| **Stories** ✨ | The returning **Stories** feature. Only channels with **10,000+ subscribers** can post; slides expire after **7 days**. Includes a full-screen viewer (progress bars, tap/arrow-key navigation, hold to pause, swipe between channels, replies, likes, view counts) and a creator with text, backgrounds, stickers, photo upload, camera capture and video links |
-| **Create** | Upload video (drag & drop, 4-step wizard: details, auto-generated or custom thumbnails, elements, checks, visibility, schedule, share to Posts/Story), Create a Short, Go live (webcam preview with simulated live chat; the replay is saved), Create post (text / image / poll / video), Create story |
-| **Channels** | Banner, avatar with story ring, Home / Videos / Shorts / Live / Playlists / Posts / Stories / About tabs |
-| **Posts** | Text, image and poll posts with voting, likes, comments, sharing and deleting |
-| **Library** | You page, History (search, pause, clear), Watch later, Liked videos, Downloads, custom playlists (create, rename, change visibility, delete, play all, shuffle) |
-| **Search** | Suggestions and search history, voice search (Web Speech API), type/date/sort filters, channel and post results |
-| **Studio** | Dashboard, Content manager (edit/delete), Analytics charts, Comment moderation, Stories manager, Go live, Channel customization (name, handle, avatar, banner, links, demo subscriber count to test the Stories gate) |
-| **Other** | Notifications panel, account menu, dark/light theme, Explore feeds (Trending, Music, Gaming…), settings, feedback, report dialogs |
-| **Mobile** | Compact header, full-screen search, bottom navigation with a Create button, bottom-sheet menus and dialogs, sticky player, collapsed comments teaser, full-bleed Shorts and Stories, mobile Studio nav |
+- **Home:** topic chips built from the catalogue, a recency-weighted feed, a Shorts shelf, a Stories row and muted hover previews.
+- **Watch:** a custom player with these controls:
+  - chapter-segmented progress bar with frame previews while hovering
+  - speed, loop, sleep timer and ambient mode
+  - captions from an uploaded `.vtt` file
+  - theater mode, miniplayer, fullscreen, press-and-hold for 2×, double-tap seek on phones, and keyboard shortcuts (`?` lists them)
 
-## Keyboard shortcuts
+  Under the player:
+  - like/dislike, subscribe with a notification bell
+  - Share (with an optional start time), Download (the actual file), Clip (a looping start–end link) and Save to playlist
+  - a description with clickable timestamps and chapters
+  - comments: sort, reply, like, edit and delete; on your own videos you can also pin and heart
+  - Up next with autoplay, a queue and playlists
+- **Shorts:** a snap-scrolling vertical feed where only the visible Short plays, with comments, share and subscribe.
+- **Stories:** channels with 10,000+ subscribers can post a photo or camera shot with text, optionally linked to one of their videos. Stories expire after 7 days. The viewer has progress bars, tap/arrow/swipe navigation, pause and likes. Stories show on Home, Subscriptions, channel pages and in Studio. Your own subscriber count can be changed in Studio → Customization to test the gate.
+- **Create:**
+  - Upload video or Short: drag and drop; thumbnails taken from the file's frames or an image you upload; chapters from description timestamps; subtitles; visibility; scheduling; share to your story
+  - Go live: webcam preview, recorded with `MediaRecorder` and published as a video when you end the stream
+  - Posts: text, image, poll or a linked video
+- **Library:**
+  - History: search, pause, clear, filter by Videos/Shorts
+  - Watch later, Liked videos, Downloads
+  - Playlists: create, edit, delete, play all, shuffle
+- **Search:** suggestions and history, voice search (Web Speech API), and filters for type, upload date, duration and sort order.
+- **Channels:** banner, a story ring on the avatar, Home/Videos/Shorts/Playlists/Posts/Stories tabs, an About dialog and in-channel search.
+- **Studio:** dashboard, content manager (edit/delete), analytics charted from real local playback, comment moderation, a Stories manager and channel customization.
+- **Notifications:** derived from your subscriptions' recent uploads, posts and stories, with a per-channel bell setting.
+- **Theme:** dark, light or device.
 
-`k`/`Space` play/pause · `j`/`l` ±10 s · `←`/`→` ±5 s · `m` mute · `f` fullscreen · `t` theater · `i` miniplayer · `c` captions · `0–9` seek · `Shift+N` next · `/` search · `?` shortcuts
+## Demo content
 
-## Project layout
+The catalogue is public-domain footage from the [NASA Image and Video Library](https://images.nasa.gov). `scripts/build-media.mjs` cuts the clips listed in `data/catalog.json`, makes the thumbnails, the vertical Shorts crops and the channel art, and records the real durations. Run it again with `npm run media -- --force` (needs ffmpeg). The channels, their subscriber counts and the viewer comments are fictional. Full credits are on the in-app **About & credits** page.
+
+## Layout
 
 ```
-index.html        app shell
-css/styles.css    all styles (dark/light themes, desktop + mobile breakpoints)
-js/icons.js       original line icon set + logo
-js/data.js        seed data, procedural thumbnails/avatars, persistence, IndexedDB media store
-js/player.js      custom video player (real <video> for uploads, animated canvas for demo videos)
-js/ui.js          header, sidebar, bottom nav, menus, modals, cards, shared actions
-js/pages.js       home, watch, shorts, subscriptions, channel, posts, search, library pages
-js/studio.js      Studio + upload wizard + go live
-js/stories.js     Stories viewer and creator
-js/app.js         hash router, boot, keyboard shortcuts
-screenshots/      desktop and mobile screenshots
+app/                 routes: /, /watch?v=, /shorts/[id], /@handle/[tab], /results, /feed/*, /playlist?list=, /post/[id], /studio/*, /account, /about
+components/          shell, chrome (header/sidebar/bottom nav), player, cards, social (comments/posts/subscribe), stories, upload, dialogs, ui kit
+lib/                 types, seed data, store (localStorage + useSyncExternalStore), media (IndexedDB), actions, formatting
+data/                catalog.json (clip list and credits), durations.json (measured)
+scripts/             build-media.mjs
+public/media/        encoded clips, thumbnails, stills
+screenshots/         desktop and phone screenshots
 ```
