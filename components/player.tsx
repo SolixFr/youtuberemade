@@ -1,12 +1,18 @@
 'use client';
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { logWatchTime, saveProgress } from '@/lib/actions';
+import { saveProgress } from '@/lib/actions/videos';
 import { formatDuration, parseChapters } from '@/lib/format';
-import { useMedia } from '@/lib/media';
-import { update, useDB } from '@/lib/store';
-import type { Video } from '@/lib/types';
 import { Icon, Switch } from './ui';
+
+/** The few fields the player needs; the miniplayer and Studio preview pass the same shape. */
+export interface PlayerVideo {
+  id: string;
+  src: string;
+  captions: string | null;
+  duration: number;
+  description: string;
+}
 
 export interface PlayerHandle {
   video: HTMLVideoElement | null;
@@ -15,7 +21,9 @@ export interface PlayerHandle {
 }
 
 interface Props {
-  v: Video;
+  video: PlayerVideo;
+  autoplayNext?: boolean;
+  onAutoplayNext?: (on: boolean) => void;
   autoplay?: boolean;
   startAt?: number;
   clip?: { start: number; end: number };
@@ -33,11 +41,10 @@ const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const prefs = { volume: 1, muted: false, rate: 1, captions: false, ambient: true };
 
 export const Player = forwardRef<PlayerHandle, Props>(function Player(
-  { v, autoplay = true, startAt, clip, hotkeys, compact, theater, onTheater, onMini, onNext, onEnded, onTime }, ref,
+  { video: v, autoplay = true, autoplayNext, onAutoplayNext, startAt, clip, hotkeys, compact, theater, onTheater, onMini, onNext, onEnded, onTime }, ref,
 ) {
-  const d = useDB();
-  const src = useMedia(v.src);
-  const captionsUrl = useMedia(v.captions);
+  const src = v.src;
+  const captionsUrl = v.captions;
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const previewVideo = useRef<HTMLVideoElement>(null);
@@ -58,11 +65,13 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const [sleepAt, setSleepAt] = useState<number | null>(null);
   const [ui, setUi] = useState(true);
   const [hoverX, setHoverX] = useState<number | null>(null);
+  const [wantPreview, setWantPreview] = useState(false);
   const [flash, setFlash] = useState<{ icon: string; key: number } | null>(null);
   const [seekHint, setSeekHint] = useState<{ side: 'l' | 'r'; key: number } | null>(null);
   const [fast, setFast] = useState(false);
   const [fs, setFs] = useState(false);
   const watched = useRef(0);
+  const lastFlush = useRef(0);
   const lastTick = useRef<number | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -83,8 +92,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     el.volume = prefs.volume;
     el.muted = prefs.muted;
     el.playbackRate = prefs.rate;
-    const resume = d.user.progress[v.id];
-    const begin = clip?.start ?? startAt ?? (resume && resume < v.duration - 5 ? resume : 0);
+    const begin = clip?.start ?? (startAt && startAt < v.duration - 5 ? startAt : 0);
     const onMeta = () => {
       if (begin) el.currentTime = begin;
       setDur(el.duration || v.duration);
@@ -93,15 +101,17 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     el.addEventListener('loadedmetadata', onMeta, { once: true });
     return () => {
       el.removeEventListener('loadedmetadata', onMeta);
-      flushWatch();
-      if (el.currentTime > 3) saveProgress(v.id, el.ended ? 0 : el.currentTime);
+      flushWatch(el.ended ? 0 : el.currentTime);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, v.id]);
 
-  const flushWatch = () => {
-    if (watched.current >= 1) logWatchTime(v.id, watched.current);
+  /** Sends the resume point and the seconds watched since the last flush. */
+  const flushWatch = (position: number) => {
+    const secs = watched.current;
     watched.current = 0;
+    lastFlush.current = Date.now();
+    if (secs >= 1 || position > 3) void saveProgress(v.id, position, secs);
   };
 
   const onTimeUpdate = () => {
@@ -119,7 +129,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       el.pause();
       setSleepAt(null);
     }
-    if (Math.floor(el.currentTime) % 5 === 0 && el.currentTime > 3) saveProgress(v.id, el.currentTime);
+    if (Date.now() - lastFlush.current > 10_000) flushWatch(el.currentTime);
   };
 
   /* ---- ambient mode: a blurred copy of the current frame behind the player ---- */
@@ -241,6 +251,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     target.addEventListener('pointerup', onUp);
   };
   const hoverPreview = (clientX: number) => {
+    if (!wantPreview) setWantPreview(true);
     const f = fracAt(clientX);
     setHoverX(f);
     const pv = previewVideo.current;
@@ -301,17 +312,17 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       <div ref={root} tabIndex={0} className={`player ${showUi ? 'show-ui' : ''} ${compact ? 'compact' : ''} ${fs ? 'fs' : ''}`}
         onMouseMove={poke} onMouseLeave={() => !paused && setUi(false)}>
         {src && (
-          <video ref={video} src={src} playsInline preload="auto" crossOrigin="anonymous" loop={loop && !clip}
+          <video ref={video} src={src} playsInline preload="auto" loop={loop && !clip}
             onPlay={() => { setPaused(false); lastTick.current = performance.now(); poke(); }}
-            onPause={() => { setPaused(true); flushWatch(); lastTick.current = null; }}
+            onPause={(e) => { setPaused(true); flushWatch(e.currentTarget.currentTime); lastTick.current = null; }}
             onTimeUpdate={onTimeUpdate}
             onDurationChange={(e) => setDur(e.currentTarget.duration)}
-            onEnded={() => { flushWatch(); saveProgress(v.id, 0); update(() => {}); onEnded?.(); }}
+            onEnded={() => { flushWatch(0); onEnded?.(); }}
             onVolumeChange={(e) => { setVolume(e.currentTarget.volume); setMuted(e.currentTarget.muted); }}>
             {captionsUrl && <track kind="subtitles" src={captionsUrl} srcLang="en" label="English" default={captions} />}
           </video>
         )}
-        {src && <video ref={previewVideo} src={src} muted preload="auto" className="preview-src" onSeeked={drawPreview} aria-hidden="true" />}
+        {src && wantPreview && <video ref={previewVideo} src={src} muted preload="metadata" className="preview-src" onSeeked={drawPreview} aria-hidden="true" />}
         <div className="p-surface" onPointerDown={onSurfaceDown} onPointerUp={onSurfaceUp} onDoubleClick={() => lastPointer.current !== 'touch' && !compact && toggleFs()} />
         {fast && <div className="p-fast">2x <Icon name="fast_forward" filled size={18} /></div>}
         {flash && <div key={flash.key} className="p-flash"><Icon name={flash.icon} filled size={36} /></div>}
@@ -393,9 +404,9 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             <span className="p-time">{formatDuration(t)} <span className="p-time-sep">/</span> {formatDuration(dur)}</span>
             {chapterNow && <span className="p-chapter hide-compact">· {chapterNow.title} <Icon name="chevron_right" size={18} /></span>}
             <span className="grow" />
-            {!compact && onNext && (
-              <span className="p-autoplay hide-mobile" data-tip={`Autoplay is ${d.user.autoplay ? 'on' : 'off'}`}>
-                <Switch label="Autoplay" on={d.user.autoplay} onChange={(x) => update((db) => { db.user.autoplay = x; })} />
+            {!compact && onAutoplayNext && (
+              <span className="p-autoplay hide-mobile" data-tip={`Autoplay is ${autoplayNext ? 'on' : 'off'}`}>
+                <Switch label="Autoplay" on={!!autoplayNext} onChange={onAutoplayNext} />
               </span>
             )}
             <button type="button" className={`p-btn ${captions ? 'cc-on' : ''}`} disabled={!captionsUrl} onClick={toggleCaptions}

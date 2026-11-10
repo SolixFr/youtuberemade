@@ -1,73 +1,82 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { setBell, setSubscribed } from '@/lib/actions';
-import { formatCount, timeAgo, uid } from '@/lib/format';
-import { channelOf, myChannel, update, useDB, videoOf } from '@/lib/store';
-import type { Comment, Post } from '@/lib/types';
+import { setBell, setSubscribed } from '@/lib/actions/channels';
+import { addComment, deleteComment, deletePost, editComment, likePost, moderateComment, voteComment, votePoll } from '@/lib/actions/social';
+import {formatCount, watchHref } from '@/lib/format';
+import type { BellLevel, Comment, Post } from '@/lib/types';
+import { Ago } from './ago';
 import { useApp } from './app-context';
-import { Thumbnail, watchHref } from './cards';
-import { Avatar, Button, ConfirmDialog, Icon, IconButton, MediaImg, Menu, useToast } from './ui';
+import { Thumbnail } from './cards';
+import { Avatar, Button, ConfirmDialog, Icon, IconButton, Menu, useToast } from './ui';
 
 /* ---------------- Subscribe ---------------- */
-export function SubscribeButton({ channelId, size = 'md' }: { channelId: string; size?: 'sm' | 'md' }) {
-  const d = useDB();
+export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
+  channel: { id: string; name: string }; initial: { subscribed: boolean; bell: BellLevel }; size?: 'sm' | 'md'; onCount?: (n: number) => void;
+}) {
+  const app = useApp();
   const toast = useToast();
+  const router = useRouter();
+  const [state, setState] = useState(initial);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [confirm, setConfirm] = useState(false);
-  const c = channelOf(d, channelId);
-  if (!c) return null;
-  if (c.isMine) {
+  if (app.me?.id === channel.id) {
     return (
-      <div className="row-wrap" style={{ margin: 0 }}>
+      <div className="btn-row">
         <Link href="/studio/customization" className={`btn btn-tonal btn-${size}`}>Customize channel</Link>
         <Link href="/studio/content" className={`btn btn-tonal btn-${size}`}>Manage videos</Link>
       </div>
     );
   }
-  const subbed = d.user.subscriptions.includes(channelId);
-  if (!subbed) {
-    return <Button variant="filled" size={size} className="subscribe-btn" onClick={() => { setSubscribed(channelId, true); toast('Subscription added'); }}>Subscribe</Button>;
+  const change = async (on: boolean) => {
+    setState((s) => ({ ...s, subscribed: on }));
+    const r = await setSubscribed(channel.id, on);
+    if (!r.ok) { setState((s) => ({ ...s, subscribed: !on })); return toast(r.error); }
+    onCount?.(r.data);
+    toast(on ? 'Subscription added' : 'Subscription removed');
+    router.refresh();
+  };
+  if (!state.subscribed) {
+    return <Button variant="filled" size={size} className="subscribe-btn" onClick={() => app.requireAuth(`Want to subscribe to ${channel.name}?`, () => change(true))}>Subscribe</Button>;
   }
-  const bell = d.user.bells[channelId] ?? 'personalized';
-  const bellIcon = bell === 'all' ? 'notifications_active' : bell === 'none' ? 'notifications_off' : 'notifications';
+  const bellIcon = state.bell === 'all' ? 'notifications_active' : state.bell === 'none' ? 'notifications_off' : 'notifications';
+  const pick = (bell: BellLevel, msg: string) => { setState((s) => ({ ...s, bell })); void setBell(channel.id, bell); toast(msg); };
   return (
     <>
       <button type="button" className={`btn btn-tonal btn-${size} subscribe-btn`} onClick={(e) => setAnchor(e.currentTarget)}>
-        <Icon name={bellIcon} size={size === 'sm' ? 20 : 24} /><span className="btn-label">Subscribed</span><Icon name="expand_more" size={20} style={{ marginRight: -6 }} />
+        <Icon name={bellIcon} size={size === 'sm' ? 20 : 24} /><span className="btn-label">Subscribed</span><Icon name="expand_more" size={20} className="trail" />
       </button>
       {anchor && (
         <Menu anchor={anchor} align="left" onClose={() => setAnchor(null)} items={[
-          { icon: 'notifications_active', label: 'All', checked: bell === 'all', onSelect: () => { setBell(channelId, 'all'); toast("You'll get all notifications"); } },
-          { icon: 'notifications', label: 'Personalized', checked: bell === 'personalized', onSelect: () => { setBell(channelId, 'personalized'); toast("You'll get personalized notifications"); } },
-          { icon: 'notifications_off', label: 'None', checked: bell === 'none', onSelect: () => { setBell(channelId, 'none'); toast("You won't get notifications"); } },
+          { icon: 'notifications_active', label: 'All', checked: state.bell === 'all', onSelect: () => pick('all', 'You’ll get all notifications') },
+          { icon: 'notifications', label: 'Personalized', checked: state.bell === 'personalized', onSelect: () => pick('personalized', 'You’ll get personalized notifications') },
+          { icon: 'notifications_off', label: 'None', checked: state.bell === 'none', onSelect: () => pick('none', 'You won’t get notifications') },
           { icon: 'person_remove', label: 'Unsubscribe', onSelect: () => setConfirm(true) },
         ]} />
       )}
-      {confirm && <ConfirmDialog title="" text={`Unsubscribe from ${c.name}?`} confirm="Unsubscribe" onClose={() => setConfirm(false)}
-        onConfirm={() => { setSubscribed(channelId, false); toast('Subscription removed'); }} />}
+      {confirm && <ConfirmDialog title="" text={`Unsubscribe from ${channel.name}?`} confirm="Unsubscribe" onClose={() => setConfirm(false)} onConfirm={() => change(false)} />}
     </>
   );
 }
 
-/* ---------------- Rich text: timestamps and hashtags ---------------- */
+/* ---------------- Rich text: timestamps, hashtags and links ---------------- */
 export function RichText({ text, onSeek }: { text: string; onSeek?: (t: number) => void }) {
   const parts: ReactNode[] = [];
-  const re = /(\b(?:\d+:)?\d{1,2}:\d{2}\b)|(#[\p{L}\d_]+)|(https?:\/\/[^\s]+)/gu;
+  const re = /(\b(?:\d+:)?\d{1,2}:\d{2}\b)|(#[\p{L}\d_]+)|(https?:\/\/[^\s<]+)/gu;
   let last = 0;
   let m: RegExpExecArray | null;
-  let i = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(text.slice(last, m.index));
+    const k = m.index;
     if (m[1] && onSeek) {
-      const segs = m[1].split(':').map(Number);
-      const secs = segs.reduce((a, b) => a * 60 + b, 0);
-      parts.push(<button type="button" key={i++} className="ts-link" onClick={(e) => { e.stopPropagation(); onSeek(secs); }}>{m[1]}</button>);
+      const secs = m[1].split(':').map(Number).reduce((a, b) => a * 60 + b, 0);
+      parts.push(<button type="button" key={k} className="ts-link" onClick={(e) => { e.stopPropagation(); onSeek(secs); }}>{m[1]}</button>);
     } else if (m[2]) {
-      parts.push(<Link key={i++} className="hashtag" href={`/results?search_query=${encodeURIComponent(m[2])}`} onClick={(e) => e.stopPropagation()}>{m[2]}</Link>);
+      parts.push(<Link key={k} className="hashtag" href={`/results?search_query=${encodeURIComponent(m[2])}`} onClick={(e) => e.stopPropagation()}>{m[2]}</Link>);
     } else if (m[3]) {
-      parts.push(<a key={i++} className="hashtag" href={m[3]} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{m[3].replace(/^https?:\/\//, '')}</a>);
+      parts.push(<a key={k} className="hashtag" href={m[3]} target="_blank" rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()}>{m[3].replace(/^https?:\/\//, '')}</a>);
     } else parts.push(m[0]);
     last = m.index + m[0].length;
   }
@@ -76,21 +85,29 @@ export function RichText({ text, onSeek }: { text: string; onSeek?: (t: number) 
 }
 
 /* ---------------- Comments ---------------- */
-function CommentComposer({ placeholder, onSubmit, onCancel, autoFocus, small }: { placeholder: string; onSubmit: (t: string) => void; onCancel?: () => void; autoFocus?: boolean; small?: boolean }) {
-  const d = useDB();
+function Composer({ placeholder, onSubmit, onCancel, autoFocus, reply }: { placeholder: string; onSubmit: (t: string) => Promise<boolean>; onCancel?: () => void; autoFocus?: boolean; reply?: boolean }) {
+  const app = useApp();
   const [text, setText] = useState('');
   const [active, setActive] = useState(!!autoFocus);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    const ok = await onSubmit(text.trim());
+    setBusy(false);
+    if (ok) { setText(''); setActive(!!reply); }
+  };
   return (
-    <div className={`c-composer ${small ? 'reply' : ''}`}>
-      <Avatar channel={myChannel(d)} size={small ? 24 : 40} />
+    <div className={`c-composer ${reply ? 'reply' : ''}`}>
+      <Avatar channel={app.me} name="?" size={reply ? 24 : 40} />
       <div className="c-field">
-        <textarea className="line-input" rows={1} value={text} placeholder={placeholder} autoFocus={autoFocus}
-          onFocus={() => setActive(true)}
+        <textarea className="line-input" rows={1} value={text} placeholder={placeholder} autoFocus={autoFocus} maxLength={10_000}
+          onFocus={() => app.requireAuth('Sign in to comment', () => setActive(true))}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) void submit(); }}
           onChange={(e) => { setText(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`; }} />
         {active && (
           <div className="c-actions">
             <Button variant="text" onClick={() => { setText(''); setActive(false); onCancel?.(); }}>Cancel</Button>
-            <Button variant="blue" disabled={!text.trim()} onClick={() => { onSubmit(text.trim()); setText(''); setActive(!!small); }}>{small ? 'Reply' : 'Comment'}</Button>
+            <Button variant="blue" disabled={!text.trim() || busy} onClick={submit}>{reply ? 'Reply' : 'Comment'}</Button>
           </div>
         )}
       </div>
@@ -98,8 +115,10 @@ function CommentComposer({ placeholder, onSubmit, onCancel, autoFocus, small }: 
   );
 }
 
-function CommentItem({ c, replies, videoOwner, onSeek }: { c: Comment; replies: Comment[]; videoOwner: string; onSeek?: (t: number) => void }) {
-  const d = useDB();
+function CommentItem({ c, replies, owner, onSeek, update, remove, add }: {
+  c: Comment; replies: Comment[]; owner: { id: string; handle: string; name: string; avatar: string | null };
+  onSeek?: (t: number) => void; update: (id: string, patch: Partial<Comment>) => void; remove: (id: string) => void; add: (c: Comment) => void;
+}) {
   const app = useApp();
   const toast = useToast();
   const [replying, setReplying] = useState(false);
@@ -108,94 +127,120 @@ function CommentItem({ c, replies, videoOwner, onSeek }: { c: Comment; replies: 
   const [draft, setDraft] = useState(c.text);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [confirm, setConfirm] = useState(false);
-  const owner = channelOf(d, videoOwner);
-  const iOwnVideo = videoOwner === 'me';
-  const liked = d.user.likedComments.includes(c.id);
-  const disliked = d.user.dislikedComments.includes(c.id);
-  const me = myChannel(d);
-  const authorAvatar = c.mine ? <Avatar channel={me} size={c.parentId ? 24 : 40} /> : c.byCreator && owner ? <Avatar channel={owner} size={c.parentId ? 24 : 40} /> : <Avatar name={c.author} size={c.parentId ? 24 : 40} />;
-  const likes = c.likes + (liked ? 1 : 0);
-  const rate = (kind: 'like' | 'dislike') => update((db) => {
-    db.user.likedComments = db.user.likedComments.filter((x) => x !== c.id);
-    db.user.dislikedComments = db.user.dislikedComments.filter((x) => x !== c.id);
-    if (kind === 'like' && !liked) db.user.likedComments.push(c.id);
-    if (kind === 'dislike' && !disliked) db.user.dislikedComments.push(c.id);
+  const iOwnVideo = app.me?.id === owner.id;
+  const size = c.parentId ? 24 : 40;
+
+  const vote = (value: -1 | 1) => app.requireAuth('Sign in to rate comments', async () => {
+    const next = c.myVote === value ? 0 : value;
+    const likes = c.likes + (next === 1 ? 1 : 0) - (c.myVote === 1 ? 1 : 0);
+    update(c.id, { myVote: next, likes });
+    const r = await voteComment(c.id, next);
+    if (!r.ok) { update(c.id, { myVote: c.myVote, likes: c.likes }); toast(r.error); }
   });
+  const moderate = async (change: 'pin' | 'unpin' | 'heart' | 'unheart') => {
+    const r = await moderateComment(c.id, change);
+    if (!r.ok) return toast(r.error);
+    if (change === 'pin' || change === 'unpin') update(c.id, { pinned: change === 'pin' });
+    else update(c.id, { hearted: change === 'heart' });
+  };
+
   return (
     <div className={`comment ${c.parentId ? 'reply' : ''}`}>
-      {authorAvatar}
+      {c.author.id ? <Link href={`/${c.author.handle}`}><Avatar name={c.author.name} src={c.author.avatar} size={size} /></Link> : <Avatar name={c.author.handle} size={size} />}
       <div className="c-body">
-        {c.pinned && owner && <div className="c-pinned"><Icon name="push_pin" size={16} />Pinned by {owner.handle}</div>}
+        {c.pinned && <div className="c-pinned"><Icon name="push_pin" size={16} />Pinned by {owner.handle}</div>}
         <div className={`c-who ${c.byCreator ? 'creator' : ''}`}>
-          <span>{c.mine ? me.handle : c.author}</span>
-          {c.byCreator && owner?.verified && <Icon name="check_circle" filled size={14} className="verified" />}
-          <span className="c-when">{timeAgo(c.createdAt)}{c.edited ? ' (edited)' : ''}</span>
+          <span>{c.author.handle}</span>
+          {c.byCreator && c.author.verified && <Icon name="check_circle" filled size={14} className="verified" />}
+          <span className="c-when"><Ago ts={c.createdAt} />{c.edited ? ' (edited)' : ''}</span>
         </div>
         {editing ? (
           <div>
-            <textarea className="line-input" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
-            <div className="c-actions"><Button variant="text" onClick={() => { setEditing(false); setDraft(c.text); }}>Cancel</Button>
-              <Button variant="blue" disabled={!draft.trim()} onClick={() => { update((db) => { const x = db.comments.find((y) => y.id === c.id); if (x) { x.text = draft.trim(); x.edited = true; } }); setEditing(false); }}>Save</Button></div>
+            <textarea className="line-input" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus maxLength={10_000} />
+            <div className="c-actions">
+              <Button variant="text" onClick={() => { setEditing(false); setDraft(c.text); }}>Cancel</Button>
+              <Button variant="blue" disabled={!draft.trim()} onClick={async () => {
+                const r = await editComment(c.id, draft);
+                if (!r.ok) return toast(r.error);
+                update(c.id, { text: r.data, edited: true });
+                setEditing(false);
+              }}>Save</Button>
+            </div>
           </div>
         ) : <div className="c-text"><RichText text={c.text} onSeek={onSeek} /></div>}
         <div className="c-toolbar">
-          <IconButton icon="thumb_up" filled={liked} label="Like" onClick={() => rate('like')} />
-          <span>{likes ? formatCount(likes) : ''}</span>
-          <IconButton icon="thumb_down" filled={disliked} label="Dislike" onClick={() => rate('dislike')} />
-          {c.hearted && owner && <span className="c-heart" title={`❤ by ${owner.name}`}><Avatar channel={owner} size={16} /><Icon name="favorite" filled size={14} className="heart" /></span>}
-          <Button variant="text" onClick={() => setReplying(true)}>Reply</Button>
+          <IconButton icon="thumb_up" filled={c.myVote === 1} label="Like" onClick={() => vote(1)} />
+          <span className="c-count">{c.likes ? formatCount(c.likes) : ''}</span>
+          <IconButton icon="thumb_down" filled={c.myVote === -1} label="Dislike" onClick={() => vote(-1)} />
+          {c.hearted && <span className="c-heart" title={`❤ by ${owner.name}`}><Avatar channel={owner} size={16} /><Icon name="favorite" filled size={14} className="heart" /></span>}
+          <Button variant="text" onClick={() => app.requireAuth('Sign in to reply', () => setReplying(true))}>Reply</Button>
           <span className="grow" />
-          <IconButton icon="more_vert" label="Action menu" onClick={(e) => setAnchor(e.currentTarget)} />
+          {(app.me) && <IconButton icon="more_vert" label="Action menu" onClick={(e) => setAnchor(e.currentTarget)} />}
         </div>
         {replying && (
-          <CommentComposer small autoFocus placeholder="Add a reply..." onCancel={() => setReplying(false)}
-            onSubmit={(t) => { update((db) => { db.comments.push({ id: uid('c'), videoId: c.videoId, parentId: c.parentId ?? c.id, author: me.handle, mine: true, byCreator: iOwnVideo, text: t, createdAt: Date.now(), likes: 0 }); }); setReplying(false); setOpen(true); }} />
+          <Composer reply autoFocus placeholder="Add a reply…" onCancel={() => setReplying(false)} onSubmit={async (t) => {
+            const r = await addComment(c.videoId, t, c.parentId ?? c.id);
+            if (!r.ok) { toast(r.error); return false; }
+            add(r.data);
+            setReplying(false);
+            setOpen(true);
+            return true;
+          }} />
         )}
         {replies.length > 0 && (
           <>
-            <button type="button" className="replies-toggle" onClick={() => setOpen(!open)}><Icon name={open ? 'expand_less' : 'expand_more'} />{replies.length} {replies.length === 1 ? 'reply' : 'replies'}</button>
-            {open && replies.map((r) => <CommentItem key={r.id} c={r} replies={[]} videoOwner={videoOwner} onSeek={onSeek} />)}
+            <button type="button" className="replies-toggle" onClick={() => setOpen(!open)} aria-expanded={open}><Icon name={open ? 'expand_less' : 'expand_more'} />{replies.length} {replies.length === 1 ? 'reply' : 'replies'}</button>
+            {open && <div className="replies">{replies.map((r) => <CommentItem key={r.id} c={r} replies={[]} owner={owner} onSeek={onSeek} update={update} remove={remove} add={add} />)}</div>}
           </>
         )}
       </div>
       {anchor && (
-        <Menu anchor={anchor} onClose={() => setAnchor(null)} sheet items={[
-          ...(iOwnVideo && !c.parentId ? [
-            { icon: 'push_pin', label: c.pinned ? 'Unpin' : 'Pin', onSelect: () => update((db) => { db.comments.forEach((x) => { if (x.videoId === c.videoId) x.pinned = x.id === c.id ? !c.pinned : false; }); }) },
-          ] : []),
-          ...(iOwnVideo ? [{ icon: 'favorite', label: c.hearted ? 'Remove heart' : 'Heart', onSelect: () => update((db) => { const x = db.comments.find((y) => y.id === c.id); if (x) x.hearted = !x.hearted; }) }] : []),
-          ...(c.mine || iOwnVideo ? [] : [{ icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'comment' }) }]),
+        <Menu anchor={anchor} onClose={() => setAnchor(null)} items={[
+          ...(iOwnVideo && !c.parentId ? [{ icon: 'push_pin', label: c.pinned ? 'Unpin' : 'Pin', onSelect: () => moderate(c.pinned ? 'unpin' : 'pin') }] : []),
+          ...(iOwnVideo ? [{ icon: 'favorite', label: c.hearted ? 'Remove heart' : 'Heart', onSelect: () => moderate(c.hearted ? 'unheart' : 'heart') }] : []),
           ...(c.mine ? [{ icon: 'edit', label: 'Edit', onSelect: () => setEditing(true) }] : []),
-          ...(c.mine || iOwnVideo ? [{ icon: 'delete', label: iOwnVideo && !c.mine ? 'Remove' : 'Delete', onSelect: () => setConfirm(true) }] : []),
+          ...(c.mine || iOwnVideo ? [{ icon: 'delete', label: c.mine ? 'Delete' : 'Remove', onSelect: () => setConfirm(true) }] : [{ icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'comment' }) }]),
         ]} />
       )}
-      {confirm && <ConfirmDialog title="Delete comment" text="Delete this comment permanently?" onClose={() => setConfirm(false)}
-        onConfirm={() => { update((db) => { db.comments = db.comments.filter((x) => x.id !== c.id && x.parentId !== c.id); }); toast('Comment deleted'); }} />}
+      {confirm && <ConfirmDialog title="Delete comment" text="Delete this comment permanently?" onClose={() => setConfirm(false)} onConfirm={async () => {
+        const r = await deleteComment(c.id);
+        if (!r.ok) return toast(r.error);
+        remove(c.id);
+        toast('Comment deleted');
+      }} />}
     </div>
   );
 }
 
-export function Comments({ videoId, onSeek, compact }: { videoId: string; onSeek?: (t: number) => void; compact?: boolean }) {
-  const d = useDB();
+export function Comments({ videoId, owner, initial, onSeek, compact }: {
+  videoId: string; owner: { id: string; handle: string; name: string; avatar: string | null }; initial: Comment[]; onSeek?: (t: number) => void; compact?: boolean;
+}) {
+  const toast = useToast();
+  const [list, setList] = useState(initial);
   const [sort, setSort] = useState<'top' | 'new'>('top');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const v = videoOf(d, videoId);
-  if (!v) return null;
-  const all = d.comments.filter((c) => c.videoId === videoId);
-  const top = all.filter((c) => !c.parentId).sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === 'top' ? b.likes - a.likes || b.createdAt - a.createdAt : b.createdAt - a.createdAt));
-  const me = myChannel(d);
+  const update = (id: string, patch: Partial<Comment>) => setList((l) => l.map((c) => {
+    if (patch.pinned && c.id !== id) return { ...c, pinned: false };
+    return c.id === id ? { ...c, ...patch } : c;
+  }));
+  const remove = (id: string) => setList((l) => l.filter((c) => c.id !== id && c.parentId !== id));
+  const add = (c: Comment) => setList((l) => [...l, c]);
+  const top = list.filter((c) => !c.parentId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || (sort === 'top' ? b.likes - a.likes || b.createdAt - a.createdAt : b.createdAt - a.createdAt));
   return (
     <div>
       {!compact && (
         <div className="c-head">
-          <h2>{all.length.toLocaleString()} Comments</h2>
+          <h2>{list.length.toLocaleString()} Comments</h2>
           <Button variant="text" icon="sort" onClick={(e) => setAnchor(e.currentTarget)}>Sort by</Button>
         </div>
       )}
-      <CommentComposer placeholder="Add a comment..." onSubmit={(t) => update((db) => {
-        db.comments.push({ id: uid('c'), videoId, author: me.handle, mine: true, byCreator: v.channelId === 'me', text: t, createdAt: Date.now(), likes: 0 });
-      })} />
-      {top.map((c) => <CommentItem key={c.id} c={c} replies={all.filter((r) => r.parentId === c.id).sort((a, b) => a.createdAt - b.createdAt)} videoOwner={v.channelId} onSeek={onSeek} />)}
+      <Composer placeholder="Add a comment…" onSubmit={async (t) => {
+        const r = await addComment(videoId, t);
+        if (!r.ok) { toast(r.error === 'auth' ? 'Sign in to comment' : r.error); return false; }
+        add(r.data);
+        return true;
+      }} />
+      {top.map((c) => <CommentItem key={c.id} c={c} replies={list.filter((r) => r.parentId === c.id)} owner={owner} onSeek={onSeek} update={update} remove={remove} add={add} />)}
       {!top.length && <p className="muted">No comments yet. Start the conversation.</p>}
       {anchor && <Menu anchor={anchor} onClose={() => setAnchor(null)} align="left" sheet={false} items={[
         { label: 'Top comments', checked: sort === 'top', onSelect: () => setSort('top') },
@@ -206,59 +251,69 @@ export function Comments({ videoId, onSeek, compact }: { videoId: string; onSeek
 }
 
 /* ---------------- Posts ---------------- */
-export function PostCard({ p }: { p: Post }) {
-  const d = useDB();
+export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?: () => void }) {
   const app = useApp();
   const toast = useToast();
+  const [p, setP] = useState(initial);
   const [confirm, setConfirm] = useState(false);
-  const c = channelOf(d, p.channelId);
-  if (!c) return null;
-  const liked = d.user.likedPosts.includes(p.id);
-  const vote = d.user.votes[p.id];
-  const total = p.poll ? p.poll.reduce((n, o) => n + o.votes, 0) + (vote !== undefined ? 1 : 0) : 0;
-  const v = videoOf(d, p.videoId);
-  const commentCount = d.postComments.filter((x) => x.postId === p.id).length;
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  const total = p.poll?.reduce((n, o) => n + o.votes, 0) ?? 0;
+  const like = () => app.requireAuth('Sign in to like posts', async () => {
+    const on = !p.liked;
+    setP({ ...p, liked: on, likes: p.likes + (on ? 1 : -1) });
+    const r = await likePost(p.id, on);
+    if (r.ok) setP((x) => ({ ...x, likes: r.data }));
+  });
+  const vote = (idx: number) => app.requireAuth('Sign in to vote', async () => {
+    const r = await votePoll(p.id, p.myVote === idx ? null : idx);
+    if (r.ok) setP(r.data); else toast(r.error);
+  });
   return (
     <article className="post">
-      <Link href={`/${c.handle}`}><Avatar channel={c} size={40} /></Link>
+      <Link href={`/${p.channel.handle}`}><Avatar channel={p.channel} size={40} /></Link>
       <div className="post-body">
-        <div className="post-who"><Link href={`/${c.handle}`}><b>{c.name}</b></Link><Link href={`/post/${p.id}`} className="muted">{timeAgo(p.createdAt)}</Link></div>
+        <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><Link href={`/post/${p.id}`} className="muted"><Ago ts={p.createdAt} /></Link></div>
         {p.text && <p className="post-text"><RichText text={p.text} /></p>}
-        {p.image && <div className="post-image"><MediaImg src={p.image} /></div>}
-        {v && (
+        {p.image && <div className="post-image"><img src={p.image} alt="" loading="lazy" decoding="async" /></div>}
+        {p.video && (
           <div className="post-video">
-            <Link href={watchHref(v)}><Thumbnail v={v} overlayActions={false} /></Link>
-            <div><Link href={watchHref(v)} className="v-title">{v.title}</Link><div className="v-sub">{formatCount(v.views)} views · {timeAgo(v.publishedAt)}</div></div>
+            <Link href={watchHref(p.video)}><Thumbnail v={p.video} actions={false} /></Link>
+            <div><Link href={watchHref(p.video)} className="v-title">{p.video.title}</Link><div className="v-sub">{formatCount(p.video.views)} views · <Ago ts={p.video.publishedAt} /></div></div>
           </div>
         )}
         {p.poll && (
-          <div>
+          <div className="poll">
             <div className="poll-meta">{total.toLocaleString()} vote{total === 1 ? '' : 's'}</div>
             {p.poll.map((o, i) => {
-              const n = o.votes + (vote === i ? 1 : 0);
-              const pct = total ? Math.round((n / total) * 100) : 0;
+              const pct = total ? Math.round((o.votes / total) * 100) : 0;
+              const voted = p.myVote !== null;
               return (
-                <button type="button" key={o.text} className={`poll-option ${vote === i ? 'chosen' : ''}`}
-                  onClick={() => update((db) => { if (db.user.votes[p.id] === i) delete db.user.votes[p.id]; else db.user.votes[p.id] = i; })}>
-                  {vote !== undefined && <span className="poll-fill" style={{ width: `${pct}%` }} />}
-                  <span>{vote === i && <Icon name="check_circle" filled size={16} style={{ marginRight: 6, verticalAlign: -3 }} />}{o.text}</span>
-                  {vote !== undefined && <span>{pct}%</span>}
+                <button type="button" key={i} className={`poll-option ${p.myVote === i ? 'chosen' : ''}`} onClick={() => vote(i)}>
+                  <span className="poll-fill" style={{ width: voted ? `${pct}%` : 0 }} />
+                  <span>{p.myVote === i && <Icon name="check_circle" filled size={16} className="poll-check" />}{o.text}</span>
+                  {voted && <span>{pct}%</span>}
                 </button>
               );
             })}
           </div>
         )}
         <div className="post-toolbar">
-          <IconButton icon="thumb_up" filled={liked} label="Like" onClick={() => update((db) => { db.user.likedPosts = liked ? db.user.likedPosts.filter((x) => x !== p.id) : [...db.user.likedPosts, p.id]; })} />
-          <span>{formatCount(p.likes + (liked ? 1 : 0))}</span>
-          <Link href={`/post/${p.id}`} className="icon-btn" style={{ width: 36, height: 36, marginLeft: 8 }} aria-label="Comments" data-tooltip="Comments"><Icon name="comment" /></Link>
-          <span>{commentCount || ''}</span>
-          <IconButton icon="share" label="Share" onClick={() => app.open({ kind: 'share', title: `Post by ${c.name}`, path: `/post/${p.id}` })} />
-          {p.channelId === 'me' && <IconButton icon="delete" label="Delete post" onClick={() => setConfirm(true)} />}
+          <IconButton icon="thumb_up" filled={p.liked} label="Like" onClick={like} />
+          <span>{formatCount(p.likes)}</span>
+          <Link href={`/post/${p.id}`} className="icon-btn" aria-label="Comments" data-tooltip="Comments"><Icon name="comment" /></Link>
+          <span>{p.comments || ''}</span>
+          <IconButton icon="share" label="Share" onClick={() => app.open({ kind: 'share', title: `Post by ${p.channel.name}`, path: `/post/${p.id}` })} />
+          {app.me?.id === p.channel.id && <IconButton icon="delete" label="Delete post" onClick={() => setConfirm(true)} />}
         </div>
       </div>
-      {confirm && <ConfirmDialog title="Delete post?" text="This post will be removed from your channel." onClose={() => setConfirm(false)}
-        onConfirm={() => { update((db) => { db.posts = db.posts.filter((x) => x.id !== p.id); }); toast('Post deleted'); }} />}
+      {confirm && <ConfirmDialog title="Delete post?" text="This post will be removed from your channel." onClose={() => setConfirm(false)} onConfirm={async () => {
+        const r = await deletePost(p.id);
+        if (!r.ok) return toast(r.error);
+        setGone(true);
+        onDeleted?.();
+        toast('Post deleted');
+      }} />}
     </article>
   );
 }

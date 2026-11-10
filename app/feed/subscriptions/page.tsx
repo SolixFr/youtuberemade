@@ -1,39 +1,32 @@
-'use client';
-
 import Link from 'next/link';
-import { ShortsShelf, VideoCard } from '@/components/cards';
+import { ShortsShelf, VideoGrid } from '@/components/cards';
+import { SignedOut } from '@/components/signed-out';
 import { PostCard } from '@/components/social';
 import { StoriesRow } from '@/components/stories';
-import { Avatar, EmptyState, useIsMobile } from '@/components/ui';
-import { feedVideos, useDB } from '@/lib/store';
+import { EmptyState } from '@/components/ui';
+import { getMe } from '@/lib/server/auth';
+import { feed, posts, storyShelf, subscriptions } from '@/lib/server/queries';
 
-export default function Subscriptions() {
-  const d = useDB();
-  const mobile = useIsMobile();
-  const subs = d.user.subscriptions;
-  const all = feedVideos(d).filter((v) => subs.includes(v.channelId)).sort((a, b) => b.publishedAt - a.publishedAt);
-  const videos = all.filter((v) => v.type === 'video');
-  const shorts = all.filter((v) => v.type === 'short').slice(0, mobile ? 4 : 6);
-  const latestPost = d.posts.filter((p) => subs.includes(p.channelId)).sort((a, b) => b.createdAt - a.createdAt)[0];
+export const metadata = { title: 'Subscriptions' };
 
+export default async function Subscriptions() {
+  const me = await getMe();
+  if (!me) return <SignedOut icon="subscriptions" title="Don’t miss new videos" text="Sign in to see updates from your favorite channels." next="/feed/subscriptions" />;
+  const subs = subscriptions(me.id).map((c) => c.id);
   if (!subs.length) {
     return <EmptyState icon="subscriptions" title="Don’t miss new videos" text="Subscribe to channels to see their latest videos here." action={<Link href="/" className="btn btn-tonal btn-md">Explore videos</Link>} />;
   }
+  const videos = feed(me.id, { type: 'video', channels: subs, order: 'recent' });
+  const shorts = feed(me.id, { type: 'short', channels: subs, order: 'recent', limit: 6 });
+  const latestPost = posts(me.id, { channels: subs, limit: 1 })[0];
   return (
     <div className="feed">
-      {mobile && (
-        <div className="stories-row pad-m" style={{ paddingTop: 12 }}>
-          {subs.map((id) => d.channels[id]).filter(Boolean).map((c) => (
-            <Link key={c.id} href={`/${c.handle}`} className="story-bubble"><Avatar channel={c} size={48} /><span className="story-name">{c.name}</span></Link>
-          ))}
-        </div>
-      )}
-      <StoriesRow />
+      <StoriesRow groups={storyShelf(me.id)} />
       <div className="sec-head"><h2>Latest</h2><Link href="/feed/channels" className="btn btn-text btn-md link">Manage</Link></div>
-      <div className="grid">{videos.slice(0, mobile ? 3 : 6).map((v) => <VideoCard key={v.id} v={v} />)}</div>
+      <VideoGrid videos={videos.slice(0, 6)} />
       <ShortsShelf videos={shorts} />
-      {latestPost && <div className="shelf pad-m"><h2 className="shelf-title">Posts</h2><PostCard p={latestPost} /></div>}
-      {videos.length > 6 && <div className="grid" style={{ paddingTop: 24 }}>{videos.slice(mobile ? 3 : 6).map((v) => <VideoCard key={v.id} v={v} />)}</div>}
+      {latestPost && <div className="shelf"><h2 className="shelf-title">Posts</h2><PostCard post={latestPost} /></div>}
+      {videos.length > 6 && <div className="grid-after"><VideoGrid videos={videos.slice(6)} /></div>}
     </div>
   );
 }

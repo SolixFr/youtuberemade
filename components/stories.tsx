@@ -1,48 +1,46 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { timeAgo, uid } from '@/lib/format';
-import { deleteFile, putFile } from '@/lib/media';
-import { activeStories, hasUnseenStory, myChannel, STORY_MIN_SUBS, update, useDB } from '@/lib/store';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createStory, deleteStory, likeStory, loadStories, markStorySeen } from '@/lib/actions/social';
+import type { StoryGroup } from '@/lib/types';
+import { uploadFile } from '@/lib/upload-client';
+import { Ago } from './ago';
 import { useApp } from './app-context';
-import { Avatar, Button, ConfirmDialog, Dialog, Field, Icon, IconButton, MediaImg, useIsMobile, useToast } from './ui';
+import { Avatar, Button, ConfirmDialog, Dialog, Field, Icon, IconButton, Spinner, useIsMobile, useToast } from './ui';
 
 const SLIDE_MS = 6000;
+const MIN_SUBS = 10_000;
 const BACKGROUNDS = ['#0f0f0f', '#1a237e', '#004d40', '#b71c1c', '#4a148c', '#e65100', '#37474f', '#f5f5f5'];
 
-/* ---------- Row of story avatars (Home on phones, Subscriptions, channel pages) ---------- */
-export function StoriesRow({ only }: { only?: string[] }) {
-  const d = useDB();
+/* ---------- Shelf of story avatars ---------- */
+export function StoriesRow({ groups }: { groups: StoryGroup[] }) {
   const app = useApp();
-  const me = myChannel(d);
-  const groups = activeStories(d).filter((g) => (only ? only.includes(g.channelId) : g.channelId === 'me' || d.user.subscriptions.includes(g.channelId)));
-  const mine = groups.find((g) => g.channelId === 'me');
-  const others = groups.filter((g) => g.channelId !== 'me').sort((a, b) => Number(hasUnseenStory(d, b.channelId)) - Number(hasUnseenStory(d, a.channelId)));
-  const eligible = me.subscribers >= STORY_MIN_SUBS;
+  const me = app.me;
+  const eligible = (me?.subscribers ?? 0) >= MIN_SUBS;
+  const mine = groups.find((g) => g.channel.id === me?.id);
+  const others = groups.filter((g) => g.channel.id !== me?.id);
   if (!others.length && !eligible) return null;
   return (
     <section className="stories" aria-label="Stories">
       <h2 className="shelf-title">Stories</h2>
       <div className="stories-row">
-        {eligible && (
+        {me && eligible && (
           <div className="story-bubble">
-            <button type="button" className="story-avatar" onClick={() => (mine ? app.openStory('me') : app.open({ kind: 'story' }))} aria-label={mine ? 'Your story' : 'Create a story'}>
-              <Avatar channel={me} size={64} ring={mine ? (hasUnseenStory(d, 'me') ? 'unseen' : 'seen') : null} />
+            <button type="button" className="story-avatar" onClick={() => (mine ? app.openStory(me.id) : app.open({ kind: 'story' }))} aria-label={mine ? 'Your story' : 'Create a story'}>
+              <Avatar channel={me} size={64} ring={mine ? mine.channel.story : null} />
               <span className="story-add" onClick={(e) => { e.stopPropagation(); app.open({ kind: 'story' }); }} role="button" aria-label="Add to story"><Icon name="add" size={16} /></span>
             </button>
             <span className="story-name">Your story</span>
           </div>
         )}
-        {others.map((g) => {
-          const c = d.channels[g.channelId];
-          return (
-            <button type="button" key={g.channelId} className="story-bubble" onClick={() => app.openStory(g.channelId)}>
-              <span className="story-avatar"><Avatar channel={c} size={64} ring={hasUnseenStory(d, g.channelId) ? 'unseen' : 'seen'} /></span>
-              <span className="story-name">{c.name}</span>
-            </button>
-          );
-        })}
+        {others.map((g) => (
+          <button type="button" key={g.channel.id} className="story-bubble" onClick={() => app.openStory(g.channel.id)}>
+            <span className="story-avatar"><Avatar channel={g.channel} size={64} ring={g.channel.story ?? 'seen'} /></span>
+            <span className="story-name">{g.channel.name}</span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -50,146 +48,154 @@ export function StoriesRow({ only }: { only?: string[] }) {
 
 /* ---------- Full-screen viewer ---------- */
 export function StoryViewer({ startChannel, onClose }: { startChannel: string; onClose: () => void }) {
-  const d = useDB();
   const app = useApp();
   const toast = useToast();
+  const router = useRouter();
   const mobile = useIsMobile();
-  const groups = useMemo(() => {
-    const all = activeStories(d).filter((g) => g.channelId === startChannel || g.channelId === 'me' || d.user.subscriptions.includes(g.channelId));
-    const first = all.filter((g) => g.channelId === startChannel);
-    return [...first, ...all.filter((g) => g.channelId !== startChannel)];
-    // Order is fixed when the viewer opens so it doesn't reshuffle as slides are marked seen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startChannel]);
+  const [groups, setGroups] = useState<StoryGroup[] | null>(null);
   const [gi, setGi] = useState(0);
-  const [si, setSi] = useState(() => {
-    const g = groups[0];
-    const i = g ? g.slides.findIndex((s) => !d.user.seenStories.includes(s.id)) : 0;
-    return Math.max(0, i);
-  });
+  const [si, setSi] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const elapsed = useRef(0);
   const bar = useRef<HTMLElement | null>(null);
   const touchX = useRef(0);
-  const holding = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const group = groups[gi];
-  const live = group ? d.stories.filter((s) => s.channelId === group.channelId && group.slides.some((x) => x.id === s.id)) : [];
-  const slide = live[si];
-  const channel = group ? d.channels[group.channelId] : undefined;
+  const close = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => { onClose(); router.refresh(); }, 150);
+  }, [onClose, router]);
+
+  useEffect(() => {
+    loadStories(startChannel).then((r) => {
+      if (!r.ok || !r.data.length) { toast('No active stories'); onClose(); return; }
+      setGroups(r.data);
+      setSi(Math.max(0, r.data[0].slides.findIndex((s) => !s.seen)));
+    });
+  }, [startChannel, onClose, toast]);
+
+  const group = groups?.[gi];
+  const slide = group?.slides[si];
 
   const go = useCallback((delta: number) => {
+    if (!groups || !group) return;
     elapsed.current = 0;
-    if (!group) return onClose();
     const next = si + delta;
-    if (next >= live.length) {
-      if (gi + 1 < groups.length) { setGi(gi + 1); setSi(0); } else onClose();
+    if (next >= group.slides.length) {
+      if (gi + 1 < groups.length) { setGi(gi + 1); setSi(0); } else close();
     } else if (next < 0) {
       if (gi > 0) { setGi(gi - 1); setSi(groups[gi - 1].slides.length - 1); } else setSi(0);
     } else setSi(next);
-  }, [si, gi, group, groups, live.length, onClose]);
+  }, [si, gi, group, groups, close]);
+
+  const marked = useRef(new Set<string>());
+  useEffect(() => {
+    if (slide && !slide.seen && !marked.current.has(slide.id)) {
+      marked.current.add(slide.id);
+      void markStorySeen(slide.id);
+    }
+  }, [slide]);
 
   useEffect(() => {
-    if (slide && !d.user.seenStories.includes(slide.id)) update((db) => { db.user.seenStories.push(slide.id); });
-  }, [slide, d.user.seenStories]);
-
-  useEffect(() => {
+    if (!slide) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       const dt = now - last;
       last = now;
-      if (paused || confirm) return;
+      if (paused || confirm || document.hidden) return;
       elapsed.current += dt;
-      if (bar.current) bar.current.style.width = `${Math.min(100, (elapsed.current / SLIDE_MS) * 100)}%`;
+      if (bar.current) bar.current.style.transform = `scaleX(${Math.min(1, elapsed.current / SLIDE_MS)})`;
       if (elapsed.current >= SLIDE_MS) go(1);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [go, paused, confirm]);
+  }, [go, paused, confirm, slide]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (confirm) return;
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close();
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p); }
     };
     document.addEventListener('keydown', key);
     document.body.classList.add('no-scroll');
-    return () => {
-      document.removeEventListener('keydown', key);
-      document.body.classList.remove('no-scroll');
-    };
-  }, [go, onClose, confirm]);
+    return () => { document.removeEventListener('keydown', key); document.body.classList.remove('no-scroll'); };
+  }, [go, close, confirm]);
 
-  if (!group || !slide || !channel) return null;
-  const liked = d.user.likedStories.includes(slide.id);
-  const linked = slide.videoId ? d.videos.find((v) => v.id === slide.videoId) : undefined;
-  const isMine = channel.id === 'me';
-
+  const isMine = group?.channel.id === app.me?.id;
   return (
-    <div className="story-viewer" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      {!mobile && (gi > 0 || si > 0) && <button type="button" className="story-nav prev" aria-label="Previous" onClick={() => go(-1)}><Icon name="chevron_left" /></button>}
-      {!mobile && <button type="button" className="story-nav next" aria-label="Next" onClick={() => go(1)}><Icon name="chevron_right" /></button>}
-      {!mobile && <IconButton icon="close" label="Close" className="story-close" onClick={onClose} />}
-      <div className="story-frame" style={{ background: slide.background }}
-        onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
-        onTouchEnd={(e) => {
-          const dx = e.changedTouches[0].clientX - touchX.current;
-          if (Math.abs(dx) > 60) { elapsed.current = 0; if (dx < 0 && gi + 1 < groups.length) { setGi(gi + 1); setSi(0); } else if (dx > 0 && gi > 0) { setGi(gi - 1); setSi(0); } }
-        }}>
-        {slide.image && <MediaImg src={slide.image} className="story-img" />}
-        <div className="story-bars">
-          {live.map((s, i) => (
-            <span key={s.id}><i ref={i === si ? (el) => { bar.current = el; } : undefined} style={{ width: i < si ? '100%' : '0%' }} /></span>
-          ))}
-        </div>
-        <div className="story-head">
-          <Link href={`/${channel.handle}`} onClick={onClose}><Avatar channel={channel} size={32} /></Link>
-          <Link href={`/${channel.handle}`} onClick={onClose} className="story-who">{channel.name}</Link>
-          <span className="story-when">{timeAgo(slide.createdAt)}</span>
-          <span className="grow" />
-          <IconButton icon={paused ? 'play_arrow' : 'pause'} filled label={paused ? 'Play' : 'Pause'} onClick={() => setPaused(!paused)} />
-          {mobile && <IconButton icon="close" label="Close" onClick={onClose} />}
-        </div>
-        <div className="story-tap left" onClick={() => go(-1)}
-          onPointerDown={() => { holding.current = setTimeout(() => setPaused(true), 200); }} onPointerUp={() => { clearTimeout(holding.current); }} />
-        <div className="story-tap right" onClick={() => { if (!paused) go(1); else setPaused(false); }}
-          onPointerDown={() => { holding.current = setTimeout(() => setPaused(true), 200); }} onPointerUp={() => { clearTimeout(holding.current); }} />
-        {slide.text && <p className="story-text" style={{ color: slide.textColor }}>{slide.text}</p>}
-        <div className="story-foot">
-          {linked && (
-            <Link className="story-link" href={linked.type === 'short' ? `/shorts/${linked.id}` : `/watch?v=${linked.id}`} onClick={onClose}>
-              <Icon name="play_arrow" filled size={20} />Watch: {linked.title}
-            </Link>
-          )}
-          <span className="grow" />
-          {isMine ? (
-            <>
-              <Button size="sm" variant="tonal" className="on-media" icon="delete" onClick={() => setConfirm(true)}>Delete</Button>
-              <Button size="sm" variant="filled" className="on-media-light" icon="add" onClick={() => { onClose(); app.open({ kind: 'story' }); }}>Add</Button>
-            </>
-          ) : (
-            <>
-              <IconButton icon="favorite" filled={liked} label={liked ? 'Unlike' : 'Like'} className={liked ? 'liked' : ''}
-                onClick={() => update((db) => { db.user.likedStories = liked ? db.user.likedStories.filter((x) => x !== slide.id) : [...db.user.likedStories, slide.id]; })} />
-              <IconButton icon="share" label="Share" onClick={() => { setPaused(true); app.open({ kind: 'share', title: `${channel.name} on Vidora`, path: `/${channel.handle}/stories` }); }} />
-            </>
-          )}
-        </div>
-      </div>
-      {confirm && (
-        <ConfirmDialog title="Delete this story?" text="It will be removed from your channel and your subscribers’ feeds." onClose={() => setConfirm(false)}
-          onConfirm={() => {
-            update((db) => { db.stories = db.stories.filter((s) => s.id !== slide.id); });
-            deleteFile(slide.image);
-            toast('Story deleted');
-            if (live.length <= 1) onClose(); else setSi(Math.max(0, si - 1));
-          }} />
+    <div className={`story-viewer ${closing ? 'closing' : ''}`} onClick={(e) => e.target === e.currentTarget && close()}>
+      {!groups || !group || !slide ? <Spinner size={40} /> : (
+        <>
+          {!mobile && (gi > 0 || si > 0) && <button type="button" className="story-nav prev" aria-label="Previous" onClick={() => go(-1)}><Icon name="chevron_left" /></button>}
+          {!mobile && <button type="button" className="story-nav next" aria-label="Next" onClick={() => go(1)}><Icon name="chevron_right" /></button>}
+          {!mobile && <IconButton icon="close" label="Close" className="story-close" onClick={close} />}
+          <div key={slide.id} className="story-frame" style={{ background: slide.background }}
+            onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+            onTouchEnd={(e) => {
+              const dx = e.changedTouches[0].clientX - touchX.current;
+              if (Math.abs(dx) < 60) return;
+              elapsed.current = 0;
+              if (dx < 0 && gi + 1 < groups.length) { setGi(gi + 1); setSi(0); } else if (dx > 0 && gi > 0) { setGi(gi - 1); setSi(0); }
+            }}>
+            {slide.image && <img src={slide.image} alt="" className="story-img" />}
+            <div className="story-bars">
+              {group.slides.map((s, i) => <span key={s.id}><i ref={i === si ? (el) => { bar.current = el; } : undefined} style={{ transform: `scaleX(${i < si ? 1 : 0})` }} /></span>)}
+            </div>
+            <div className="story-head">
+              <Link href={`/${group.channel.handle}`} onClick={close} className="story-who"><Avatar channel={group.channel} size={32} />{group.channel.name}</Link>
+              <span className="story-when"><Ago ts={slide.createdAt} /></span>
+              <span className="grow" />
+              <IconButton icon={paused ? 'play_arrow' : 'pause'} filled label={paused ? 'Play' : 'Pause'} onClick={() => setPaused(!paused)} />
+              {mobile && <IconButton icon="close" label="Close" onClick={close} />}
+            </div>
+            <div className="story-tap left" onClick={() => go(-1)} />
+            <div className="story-tap right" onClick={() => (paused ? setPaused(false) : go(1))}
+              onPointerDown={(e) => { const t = setTimeout(() => setPaused(true), 250); e.currentTarget.addEventListener('pointerup', () => clearTimeout(t), { once: true }); }} />
+            {slide.text && <p className="story-text" style={{ color: slide.textColor }}>{slide.text}</p>}
+            <div className="story-foot">
+              {slide.video && (
+                <Link className="story-link" href={slide.video.type === 'short' ? `/shorts/${slide.video.id}` : `/watch?v=${slide.video.id}`} onClick={close}>
+                  <Icon name="play_arrow" filled size={20} />{slide.video.title}
+                </Link>
+              )}
+              <span className="grow" />
+              {isMine ? (
+                <>
+                  <Button size="sm" className="on-media" icon="delete" onClick={() => setConfirm(true)}>Delete</Button>
+                  <Button size="sm" variant="filled" className="on-media-light" icon="add" onClick={() => { close(); app.open({ kind: 'story' }); }}>Add</Button>
+                </>
+              ) : (
+                <>
+                  <IconButton icon="favorite" filled={slide.liked} label={slide.liked ? 'Unlike' : 'Like'} className={slide.liked ? 'liked' : ''}
+                    onClick={() => app.requireAuth('Sign in to like stories', () => {
+                      const on = !slide.liked;
+                      setGroups((gs) => gs?.map((g, i) => (i === gi ? { ...g, slides: g.slides.map((s) => (s.id === slide.id ? { ...s, liked: on } : s)) } : g)) ?? null);
+                      void likeStory(slide.id, on);
+                    })} />
+                  <IconButton icon="share" label="Share" onClick={() => { setPaused(true); app.open({ kind: 'share', title: `${group.channel.name} on Vidora`, path: `/${group.channel.handle}/stories` }); }} />
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      {confirm && slide && (
+        <ConfirmDialog title="Delete this story?" text="It will be removed from your channel and your subscribers’ feeds." onClose={() => setConfirm(false)} onConfirm={async () => {
+          const r = await deleteStory(slide.id);
+          if (!r.ok) return toast(r.error);
+          toast('Story deleted');
+          if (group!.slides.length <= 1) close();
+          else {
+            setGroups((gs) => gs?.map((g, i) => (i === gi ? { ...g, slides: g.slides.filter((s) => s.id !== slide.id) } : g)) ?? null);
+            setSi(Math.max(0, si - 1));
+          }
+        }} />
       )}
     </div>
   );
@@ -197,40 +203,34 @@ export function StoryViewer({ startChannel, onClose }: { startChannel: string; o
 
 /* ---------- Composer ---------- */
 export function StoryComposer({ onClose }: { onClose: () => void }) {
-  const d = useDB();
-  const toast = useToast();
   const app = useApp();
-  const me = myChannel(d);
+  const toast = useToast();
+  const router = useRouter();
+  const me = app.me!;
   const [text, setText] = useState('');
   const [bg, setBg] = useState(BACKGROUNDS[1]);
   const [color, setColor] = useState('#ffffff');
   const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
-  const [videoId, setVideoId] = useState('');
   const [camera, setCamera] = useState<MediaStream | null>(null);
+  const [busy, setBusy] = useState(false);
   const camVideo = useRef<HTMLVideoElement>(null);
-  const mine = d.videos.filter((v) => v.channelId === 'me' && v.visibility === 'public');
 
   useEffect(() => () => camera?.getTracks().forEach((t) => t.stop()), [camera]);
-  useEffect(() => { if (camVideo.current && camera) { camVideo.current.srcObject = camera; camVideo.current.play().catch(() => {}); } }, [camera]);
+  useEffect(() => { if (camVideo.current && camera) { camVideo.current.srcObject = camera; void camVideo.current.play().catch(() => {}); } }, [camera]);
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url); }, [photo]);
 
-  if (me.subscribers < STORY_MIN_SUBS) {
-    const pct = Math.min(100, (me.subscribers / STORY_MIN_SUBS) * 100);
+  if (me.subscribers < MIN_SUBS) {
     return (
-      <Dialog title="Stories" onClose={onClose} width={460}
-        footer={<><Link className="btn btn-text btn-md" href="/studio/customization" onClick={onClose}>Change subscriber count</Link><Button variant="blue" onClick={onClose}>Got it</Button></>}>
-        <p>Stories are available to channels with <b>{STORY_MIN_SUBS.toLocaleString()} or more subscribers</b>.</p>
-        <div className="gate"><div className="gate-bar"><i style={{ width: `${pct}%` }} /></div><span>{me.subscribers.toLocaleString()} / {STORY_MIN_SUBS.toLocaleString()}</span></div>
-        <p className="muted small">This demo lets you edit your own subscriber count in Studio → Customization to try the feature.</p>
+      <Dialog title="Stories" onClose={onClose} width={460} footer={(close) => <Button variant="blue" onClick={close}>Got it</Button>}>
+        <p>Stories are available to channels with <b>{MIN_SUBS.toLocaleString()} or more subscribers</b>.</p>
+        <div className="gate"><div className="gate-bar"><i style={{ width: `${Math.min(100, (me.subscribers / MIN_SUBS) * 100)}%` }} /></div><span>{me.subscribers.toLocaleString()} / {MIN_SUBS.toLocaleString()}</span></div>
       </Dialog>
     );
   }
 
   const startCamera = async () => {
-    try {
-      setCamera(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }));
-    } catch {
-      toast('Camera unavailable. You can upload a photo instead.');
-    }
+    try { setCamera(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })); }
+    catch { toast('Camera unavailable. You can upload a photo instead.'); }
   };
   const snap = () => {
     const v = camVideo.current;
@@ -239,32 +239,40 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
     c.width = v.videoWidth;
     c.height = v.videoHeight;
     c.getContext('2d')?.drawImage(v, 0, 0);
-    c.toBlob((b) => { if (b) setPhoto({ blob: b, url: URL.createObjectURL(b) }); }, 'image/jpeg', 0.88);
+    c.toBlob((b) => b && setPhoto({ blob: b, url: URL.createObjectURL(b) }), 'image/jpeg', 0.88);
     camera?.getTracks().forEach((t) => t.stop());
     setCamera(null);
   };
-  const post = async () => {
-    const image = photo ? await putFile(photo.blob) : undefined;
-    update((db) => {
-      db.stories.push({ id: uid('st'), channelId: 'me', createdAt: Date.now(), image, background: bg, text: text.trim(), textColor: color, videoId: videoId || undefined });
-    });
-    onClose();
-    toast('Story posted. It will be visible for 7 days.', { label: 'View', run: () => app.openStory('me') });
+  const post = async (close: () => void) => {
+    setBusy(true);
+    try {
+      const image = photo ? await uploadFile(photo.blob, 'image').promise : null;
+      const r = await createStory({ image, text, background: bg, textColor: color });
+      if (!r.ok) return toast(r.error);
+      close();
+      router.refresh();
+      toast('Story posted. It stays up for 7 days.', { label: 'View', run: () => app.openStory(me.id) });
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Dialog title="Create story" onClose={onClose} width={760}
-      footer={<><Button variant="text" onClick={onClose}>Cancel</Button><Button variant="blue" disabled={!text.trim() && !photo} onClick={post}>Post story</Button></>}>
+      footer={(close) => <><Button variant="text" onClick={close}>Cancel</Button><Button variant="blue" disabled={(!text.trim() && !photo) || busy} onClick={() => post(close)}>{busy ? 'Posting…' : 'Post story'}</Button></>}>
       <div className="story-editor">
         <div className="story-preview" style={{ background: bg }}>
-          {camera ? <video ref={camVideo} muted playsInline className="story-img" /> : photo && <img src={photo.url} alt="" className="story-img" />}
+          {camera ? <video ref={camVideo} muted playsInline className="story-img mirror" /> : photo && <img src={photo.url} alt="" className="story-img" />}
           {text && <p className="story-text" style={{ color }}>{text}</p>}
-          {videoId && <span className="story-link"><Icon name="play_arrow" filled size={18} />Watch video</span>}
           {camera && <Button variant="filled" className="snap on-media-light" icon="photo_camera" onClick={snap}>Take photo</Button>}
         </div>
         <div className="story-controls">
-          <div className="row-wrap">
-            <label className="btn btn-tonal btn-sm"><Icon name="add_photo_alternate" size={20} />Photo<input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto({ blob: f, url: URL.createObjectURL(f) }); }} /></label>
+          <div className="btn-row">
+            <label className="btn btn-tonal btn-sm"><Icon name="add_photo_alternate" size={20} />Photo
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto({ blob: f, url: URL.createObjectURL(f) }); }} />
+            </label>
             <Button size="sm" icon="photo_camera" onClick={startCamera}>Camera</Button>
             {photo && <Button size="sm" variant="text" icon="close" onClick={() => setPhoto(null)}>Remove photo</Button>}
           </div>
@@ -273,13 +281,7 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
           <div className="swatches">{BACKGROUNDS.map((b) => <button type="button" key={b} aria-label={`Background ${b}`} className={bg === b ? 'on' : ''} style={{ background: b }} onClick={() => { setBg(b); setColor(b === '#f5f5f5' ? '#0f0f0f' : '#ffffff'); }} />)}</div>
           <p className="label">Text color</p>
           <div className="swatches">{['#ffffff', '#0f0f0f', '#ffd54f', '#80deea'].map((c) => <button type="button" key={c} aria-label={`Text ${c}`} className={color === c ? 'on' : ''} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
-          <Field label="Link a video (optional)">
-            <select value={videoId} onChange={(e) => setVideoId(e.target.value)}>
-              <option value="">None</option>
-              {mine.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-            </select>
-          </Field>
-          {!mine.length && <p className="muted small">Public videos you upload can be linked from a story.</p>}
+          <p className="muted small">Stories are visible for 7 days on your channel and in your subscribers’ feeds.</p>
         </div>
       </div>
     </Dialog>

@@ -1,31 +1,26 @@
-'use client';
+import { PlaylistTile } from '@/components/library';
+import { SignedOut } from '@/components/signed-out';
+import { getMe } from '@/lib/server/auth';
+import { likedIds, playlists, videosByIds, watchLaterIds } from '@/lib/server/queries';
+import { NewPlaylistButton } from './new-playlist';
 
-import { useState } from 'react';
-import { PlaylistTile, playlistCards } from '@/components/library';
-import { Button, Dialog, Field } from '@/components/ui';
-import { createPlaylist } from '@/lib/actions';
-import { useDB } from '@/lib/store';
-import type { Visibility } from '@/lib/types';
+export const metadata = { title: 'Playlists' };
 
-export default function PlaylistsPage() {
-  const d = useDB();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [vis, setVis] = useState<Visibility>('private');
+export default async function PlaylistsPage() {
+  const me = await getMe();
+  if (!me) return <SignedOut icon="playlist_play" title="Save videos for later" text="Sign in to create and manage playlists." next="/feed/playlists" />;
+  const wl = watchLaterIds(me.id);
+  const ll = likedIds(me.id);
+  const cover = (ids: string[]) => videosByIds(ids.slice(0, 1), me.id)[0]?.thumbnail ?? null;
+  const lists = [
+    { id: 'WL', title: 'Watch later', visibility: 'private' as const, count: wl.length, thumbnail: cover(wl), updatedAt: 0 },
+    { id: 'LL', title: 'Liked videos', visibility: 'private' as const, count: ll.length, thumbnail: cover(ll), updatedAt: 0 },
+    ...playlists(me.id),
+  ];
   return (
     <div className="page-pad">
-      <div className="sec-head" style={{ padding: 0 }}>
-        <h1 className="page-title">Playlists</h1>
-        <Button icon="add" onClick={() => setOpen(true)}>New playlist</Button>
-      </div>
-      <div className="grid">{playlistCards(d).map((p) => <PlaylistTile key={p.id} {...p} />)}</div>
-      {open && (
-        <Dialog title="New playlist" onClose={() => setOpen(false)} width={420}
-          footer={<><Button variant="text" onClick={() => setOpen(false)}>Cancel</Button><Button variant="blue" disabled={!title.trim()} onClick={() => { createPlaylist(title.trim(), vis); setOpen(false); setTitle(''); }}>Create</Button></>}>
-          <Field label="Title" count={`${title.length}/150`}><input autoFocus maxLength={150} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-          <Field label="Visibility"><select value={vis} onChange={(e) => setVis(e.target.value as Visibility)}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></Field>
-        </Dialog>
-      )}
+      <div className="sec-head"><h1 className="page-title">Playlists</h1><NewPlaylistButton /></div>
+      <div className="grid">{lists.map((p) => <PlaylistTile key={p.id} p={p} />)}</div>
     </div>
   );
 }

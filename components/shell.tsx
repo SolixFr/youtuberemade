@@ -1,80 +1,55 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
-import { useDB, useHydrated, videoOf } from '@/lib/store';
+import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import type { Me } from '@/lib/types';
 import { AppProvider, useApp } from './app-context';
-import { ChannelName } from './cards';
-import { BottomNav, Guide, Masthead, type GuideMode } from './chrome';
+import { BottomNav, Guide, Masthead, type GuideChannel, type GuideMode } from './chrome';
 import { GlobalDialogs } from './dialogs';
 import { Player } from './player';
 import { StoryComposer, StoryViewer } from './stories';
-import { Icon, IconButton, ToastProvider, useIsMobile } from './ui';
+import { IconButton, ToastProvider } from './ui';
 import { PostComposer, UploadDialog } from './upload';
+
+function subscribeResize(cb: () => void) {
+  window.addEventListener('resize', cb);
+  return () => window.removeEventListener('resize', cb);
+}
 
 function useGuideMode(): GuideMode {
   const path = usePathname();
-  const [w, setW] = useState(1440);
-  useEffect(() => {
-    const f = () => setW(window.innerWidth);
-    f();
-    window.addEventListener('resize', f);
-    return () => window.removeEventListener('resize', f);
-  }, []);
-  if (w < 792) return 'none';
-  if (path.startsWith('/watch') || path.startsWith('/studio')) return 'drawer';
-  if (path.startsWith('/shorts')) return w >= 1312 ? 'mini' : 'drawer';
-  return w >= 1312 ? 'full' : 'mini';
-}
-
-function ThemeSync() {
-  const d = useDB();
-  useEffect(() => {
-    const apply = () => {
-      const dark = d.user.theme === 'dark' || (d.user.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0f0f0f' : '#ffffff');
-    };
-    apply();
-    const q = matchMedia('(prefers-color-scheme: dark)');
-    q.addEventListener('change', apply);
-    return () => q.removeEventListener('change', apply);
-  }, [d.user.theme]);
-  return null;
+  const width = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 1440);
+  if (width < 792) return 'none';
+  if (path.startsWith('/watch') || path.startsWith('/studio') || path.startsWith('/messages')) return 'drawer';
+  if (path.startsWith('/shorts')) return width >= 1312 ? 'mini' : 'drawer';
+  return width >= 1312 ? 'full' : 'mini';
 }
 
 function MiniPlayer() {
   const app = useApp();
-  const d = useDB();
   const router = useRouter();
   const path = usePathname();
-  const mobile = useIsMobile();
-  const v = videoOf(d, app.mini?.videoId);
+  const mini = app.mini;
   const [time, setTime] = useState(0);
-  useEffect(() => {
-    if (path.startsWith('/watch') || path.startsWith('/shorts')) app.setMini(null);
-  }, [path, app]);
-  if (!app.mini || !v) return null;
+  if (!mini || path.startsWith('/watch') || path.startsWith('/shorts')) return null;
   const expand = () => {
-    const id = v.id;
     app.setMini(null);
-    router.push(`/watch?v=${id}&t=${Math.floor(time)}`);
+    router.push(`/watch?v=${mini.videoId}&t=${Math.floor(time || mini.time)}`);
   };
   return (
     <div className="miniplayer">
       <div className="mini-video">
-        <Player v={v} compact startAt={app.mini.time} autoplay={app.mini.playing} onTime={setTime} hotkeys />
+        <Player video={{ id: mini.videoId, src: mini.src, captions: mini.captions, duration: mini.duration, description: '' }} compact startAt={mini.time} autoplay={mini.playing} onTime={setTime} hotkeys />
         <div className="mini-top">
           <IconButton icon="open_in_full" label="Expand" onClick={expand} />
           <IconButton icon="close" label="Close" onClick={() => app.setMini(null)} />
         </div>
       </div>
-      <div className="mini-info" onClick={expand}>
-        <div className="mini-title">{v.title}</div>
-        <ChannelName channelId={v.channelId} />
-      </div>
-      {mobile && <IconButton icon="close" label="Close" onClick={() => app.setMini(null)} />}
+      <button type="button" className="mini-info" onClick={expand}>
+        <span className="mini-title">{mini.title}</span>
+        <span className="muted small">{mini.channelName}</span>
+      </button>
+      <IconButton icon="close" label="Close" className="mobile-only" onClick={() => app.setMini(null)} />
     </div>
   );
 }
@@ -98,7 +73,7 @@ function GlobalKeys() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === '/') {
         const input = document.querySelector<HTMLInputElement>('.search-box input');
         if (input) { e.preventDefault(); input.focus(); }
@@ -110,49 +85,33 @@ function GlobalKeys() {
   return null;
 }
 
-function Frame({ children }: { children: ReactNode }) {
+function Frame({ children, subscriptions, badges }: { children: ReactNode; subscriptions: GuideChannel[]; badges: { notifications: number; messages: number } }) {
   const mode = useGuideMode();
   const path = usePathname();
   const app = useApp();
-  useEffect(() => { app.setDrawer(false); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
+  const route = path.split('/')[1] || 'home';
+  const { setDrawer } = app;
+  useEffect(() => setDrawer(false), [path, setDrawer]); // close the drawer on navigation
   return (
-    <div className={`app mode-${mode} ${path.startsWith('/shorts') ? 'route-shorts' : ''} ${path.startsWith('/watch') ? 'route-watch' : ''} ${path.startsWith('/studio') ? 'route-studio' : ''}`}>
-      <Masthead />
-      <Guide mode={mode} />
-      <main className="page">{children}</main>
+    <div className={`app mode-${mode} route-${route}`}>
+      <a href="#main" className="skip-link">Skip to content</a>
+      <Masthead badges={badges} />
+      <Guide mode={mode} subscriptions={subscriptions} />
+      <main className="page" id="main">{children}</main>
       <BottomNav />
       <MiniPlayer />
       <Overlays />
       <GlobalKeys />
-      <ThemeSync />
     </div>
   );
 }
 
-/** First paint (and the server render) shows skeletons; the app renders once local data is available. */
-function Skeleton() {
-  return (
-    <div className="app mode-full">
-      <header className="masthead"><div className="mh-start"><span className="icon-btn"><Icon name="menu" /></span><Link href="/" className="logo"><span className="logo-word">Vidora</span></Link></div></header>
-      <main className="page">
-        <div className="grid skeleton-grid">
-          {Array.from({ length: 12 }, (_, i) => (
-            <div key={i} className="card skeleton"><div className="thumb" /><div className="card-meta"><span className="sk-avatar" /><div className="sk-lines"><span /><span /></div></div></div>
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-}
-
-export function AppShell({ children }: { children: ReactNode }) {
-  const ready = useHydrated();
-  if (!ready) return <Skeleton />;
+export function AppShell({ me, subscriptions, badges, children }: { me: Me | null; subscriptions: GuideChannel[]; badges: { notifications: number; messages: number }; children: ReactNode }) {
   return (
     <ToastProvider>
-      <AppProvider>
-        <Suspense fallback={<Skeleton />}>
-          <Frame>{children}</Frame>
+      <AppProvider me={me}>
+        <Suspense>
+          <Frame subscriptions={subscriptions} badges={badges}>{children}</Frame>
         </Suspense>
       </AppProvider>
     </ToastProvider>

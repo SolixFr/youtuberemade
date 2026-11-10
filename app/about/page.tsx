@@ -1,13 +1,13 @@
-'use client';
-
 import catalog from '@/data/catalog.json';
+
+export const metadata = { title: 'About' };
 
 export default function AboutPage() {
   return (
     <div className="page-pad about-page" style={{ maxWidth: 860 }}>
       <h1 className="page-title">About Vidora</h1>
       <div className="pad-m">
-        <p>Vidora is a video app built with Next.js, React and TypeScript. It runs entirely in your browser: there is no server or account, and your uploads, comments, posts and stories are stored locally.</p>
+        <p>Vidora is a video app built with Next.js, React and TypeScript. Data lives in a SQLite database on the server, uploads are stored on disk, and accounts use hashed passwords with httpOnly session cookies.</p>
         <p>It follows the conventions people know from large video platforms: a home feed with topic chips, a watch page with comments and up-next suggestions, a vertical Shorts feed, channels, playlists, search filters and a creator Studio. It also brings back <b>Stories</b>: 7-day posts available to channels with at least 10,000 subscribers.</p>
         <h2 className="sec-head">Credits</h2>
         <ul>

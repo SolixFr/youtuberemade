@@ -36,9 +36,6 @@ export function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function plural(n: number, word: string): string {
-  return `${formatCount(n)} ${word}${n === 1 ? '' : 's'}`;
-}
 
 /** Parses "0:00 Intro" style lines from a description into chapters (needs a 0:00 entry, like the real feature). */
 export function parseChapters(description: string, duration: number): { t: number; title: string }[] {
@@ -53,7 +50,6 @@ export function parseChapters(description: string, duration: number): { t: numbe
   return found.sort((a, b) => a.t - b.t);
 }
 
-export function uid(prefix: string): string {
-  const rnd = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
-  return `${prefix}_${rnd}`;
-}
+
+/** Link to a video: Shorts open in the vertical player, everything else on the watch page. */
+export const watchHref = (v: { id: string; type: 'video' | 'short' }, extra = '') => (v.type === 'short' ? `/shorts/${v.id}` : `/watch?v=${v.id}${extra}`);

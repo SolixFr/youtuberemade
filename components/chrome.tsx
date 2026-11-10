@@ -2,13 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { addSearch } from '@/lib/actions';
-import { timeAgo } from '@/lib/format';
-import { activeStories, feedVideos, myChannel, notificationsFor, STORY_MIN_SUBS, update, useDB } from '@/lib/store';
-import type { Theme } from '@/lib/types';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { badgeCounts, dismissNotification, loadNotifications, markNotificationsRead, removeSearch, saveSearch, searchSuggestions } from '@/lib/actions/account';
+import { setTheme, signOut } from '@/lib/actions/auth';
+import { setBell } from '@/lib/actions/channels';
+import type { ChannelLite, Notification, Theme } from '@/lib/types';
+import { Ago } from './ago';
 import { useApp } from './app-context';
-import { Avatar, Dialog, Icon, IconButton, MediaImg, Menu, ShortsIcon, useIsMobile, useToast, type MenuItem } from './ui';
+import { Avatar, Dialog, Icon, IconButton, Menu, ShortsIcon, Spinner, useIsMobile, type MenuItem } from './ui';
+
+export interface GuideChannel extends ChannelLite { hasNew: boolean }
 
 export function Logo() {
   return (
@@ -23,61 +26,61 @@ export function Logo() {
 }
 
 /* ---------------- Search ---------------- */
-function SearchBox({ onDone, autoFocus }: { onDone?: () => void; autoFocus?: boolean }) {
-  const d = useDB();
+type SpeechCtor = new () => { lang: string; interimResults: boolean; start: () => void; abort: () => void; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void; onend: () => void; onerror: () => void };
+
+function SearchBox({ initial, onDone, autoFocus }: { initial: string; onDone?: () => void; autoFocus?: boolean }) {
   const router = useRouter();
-  const params = useSearchParams();
-  const pathname = usePathname();
-  const [q, setQ] = useState(() => (pathname === '/results' ? params.get('search_query') ?? '' : ''));
+  const { me } = useApp();
+  const [q, setQ] = useState(initial);
   const [open, setOpen] = useState(false);
   const [hl, setHl] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [listening, setListening] = useState(false);
+  const [items, setItems] = useState<string[]>([]);
+  const [history, setHistory] = useState<Set<string>>(new Set());
+  const [voice, setVoice] = useState<'off' | 'listening' | 'unsupported'>('off');
+  const input = useRef<HTMLInputElement>(null);
+  const seq = useRef(0);
 
-  const suggestions = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    const hist = d.user.searchHistory.filter((s) => s.toLowerCase().includes(term)).slice(0, term ? 3 : 10).map((s) => ({ s, hist: true }));
-    if (!term) return hist;
-    const pool = new Set<string>();
-    for (const v of feedVideos(d)) if (v.title.toLowerCase().includes(term)) pool.add(v.title.toLowerCase());
-    for (const c of Object.values(d.channels)) if (c.name.toLowerCase().includes(term) && !c.isMine) pool.add(c.name.toLowerCase());
-    return [...hist, ...[...pool].filter((s) => !hist.some((h) => h.s === s)).slice(0, 10 - hist.length).map((s) => ({ s, hist: false }))];
-  }, [q, d]);
+  // Debounced suggestions from the server; stale responses are ignored.
+  useEffect(() => {
+    if (!open) return;
+    const n = ++seq.current;
+    const t = setTimeout(async () => {
+      const res = await searchSuggestions(q);
+      if (n !== seq.current || !res.ok) return;
+      setItems(res.data);
+      if (!q) setHistory(new Set(res.data));
+    }, q ? 150 : 0);
+    return () => clearTimeout(t);
+  }, [q, open]);
 
   const go = (text: string) => {
     const t = text.trim();
     if (!t) return;
-    addSearch(t);
     setOpen(false);
-    inputRef.current?.blur();
+    input.current?.blur();
     onDone?.();
+    if (me) void saveSearch(t);
     router.push(`/results?search_query=${encodeURIComponent(t)}`);
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    go(hl >= 0 ? suggestions[hl].s : q);
+    go(hl >= 0 ? items[hl] : q);
   };
-
-  const voice = () => {
-    type SR = { lang: string; interimResults: boolean; start: () => void; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void; onend: () => void; onerror: () => void };
-    const w = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
+  const listen = () => {
+    const w = window as unknown as { SpeechRecognition?: SpeechCtor; webkitSpeechRecognition?: SpeechCtor };
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Ctor) {
-      setListening(true);
-      return;
-    }
+    if (!Ctor) return setVoice('unsupported');
     const rec = new Ctor();
-    rec.lang = 'en-US';
+    rec.lang = navigator.language || 'en-US';
     rec.interimResults = true;
     rec.onresult = (e) => {
       const text = Array.from(e.results).map((r) => r[0].transcript).join('');
       setQ(text);
-      const last = e.results[e.results.length - 1];
-      if (last.isFinal) go(text);
+      if (e.results[e.results.length - 1].isFinal) { setVoice('off'); go(text); }
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    setListening(true);
+    rec.onend = () => setVoice('off');
+    rec.onerror = () => setVoice('off');
+    setVoice('listening');
     rec.start();
   };
 
@@ -86,37 +89,30 @@ function SearchBox({ onDone, autoFocus }: { onDone?: () => void; autoFocus?: boo
       <form className="search-form" role="search" onSubmit={submit}>
         <div className="search-box">
           <Icon name="search" size={20} className="search-lead" />
-          <input
-            ref={inputRef}
-            value={q}
-            autoFocus={autoFocus}
+          <input ref={input} value={q} autoFocus={autoFocus} placeholder="Search" aria-label="Search" autoComplete="off" spellCheck={false} enterKeyHint="search"
             onChange={(e) => { setQ(e.target.value); setHl(-1); setOpen(true); }}
             onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onBlur={() => setTimeout(() => setOpen(false), 120)}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') { e.preventDefault(); setHl((h) => Math.min(suggestions.length - 1, h + 1)); }
+              if (e.key === 'ArrowDown') { e.preventDefault(); setHl((h) => Math.min(items.length - 1, h + 1)); }
               if (e.key === 'ArrowUp') { e.preventDefault(); setHl((h) => Math.max(-1, h - 1)); }
-              if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); }
-            }}
-            placeholder="Search"
-            aria-label="Search"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {q && <IconButton icon="close" label="Clear search query" size={36} onClick={() => { setQ(''); inputRef.current?.focus(); }} />}
+              if (e.key === 'Escape') { setOpen(false); input.current?.blur(); }
+            }} />
+          {q && <IconButton icon="close" label="Clear search query" size={36} onClick={() => { setQ(''); input.current?.focus(); }} />}
         </div>
         <button className="search-btn" type="submit" aria-label="Search" data-tooltip="Search"><Icon name="search" /></button>
-        {open && suggestions.length > 0 && (
+        {open && items.length > 0 && (
           <ul className="suggest" role="listbox">
-            {suggestions.map((it, i) => (
-              <li key={it.s} className={i === hl ? 'hl' : ''} onMouseDown={(e) => { e.preventDefault(); go(it.s); }}>
-                <Icon name={it.hist ? 'history' : 'search'} size={20} />
-                <span className="grow">{it.s}</span>
-                {it.hist && (
+            {items.map((s, i) => (
+              <li key={s} role="option" aria-selected={i === hl} className={i === hl ? 'hl' : ''} onMouseDown={(e) => { e.preventDefault(); go(s); }}>
+                <Icon name={history.has(s) ? 'history' : 'search'} size={20} />
+                <span className="grow">{s}</span>
+                {history.has(s) && me && (
                   <button type="button" className="suggest-remove" onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    update((db) => { db.user.searchHistory = db.user.searchHistory.filter((s) => s !== it.s); });
+                    setItems((x) => x.filter((y) => y !== s));
+                    void removeSearch(s);
                   }}>Remove</button>
                 )}
               </li>
@@ -124,12 +120,12 @@ function SearchBox({ onDone, autoFocus }: { onDone?: () => void; autoFocus?: boo
           </ul>
         )}
       </form>
-      <IconButton icon="mic" label="Search with your voice" className="mic-btn" onClick={voice} filled />
-      {listening && (
-        <Dialog title="" onClose={() => setListening(false)} width={560}>
+      <IconButton icon="mic" filled label="Search with your voice" className="mic-btn" onClick={listen} />
+      {voice !== 'off' && (
+        <Dialog title="" onClose={() => setVoice('off')} width={480}>
           <div className="voice">
-            <span className="voice-dot"><Icon name="mic" filled size={36} /></span>
-            <p>{('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) ? 'Listening…' : 'Voice search isn’t supported in this browser.'}</p>
+            {voice === 'listening' && <span className="voice-dot"><Icon name="mic" filled size={36} /></span>}
+            <p>{voice === 'listening' ? 'Listening…' : 'Voice search isn’t supported in this browser.'}</p>
           </div>
         </Dialog>
       )}
@@ -137,56 +133,61 @@ function SearchBox({ onDone, autoFocus }: { onDone?: () => void; autoFocus?: boo
   );
 }
 
-/* ---------------- Masthead menus ---------------- */
-function CreateMenu({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
+/* ---------------- Menus ---------------- */
+function CreateMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }) {
   const app = useApp();
-  const d = useDB();
   const router = useRouter();
-  const eligible = myChannel(d).subscribers >= STORY_MIN_SUBS;
+  const eligible = (app.me?.subscribers ?? 0) >= 10_000;
+  const need = (fn: () => void) => () => app.requireAuth('Sign in to create content', fn);
   return (
     <Menu anchor={anchor} onClose={onClose} header={<div className="menu-title mobile-only">Create</div>} items={[
-      { icon: 'upload', label: 'Upload video', onSelect: () => app.open({ kind: 'upload' }) },
-      { icon: <ShortsIcon />, label: 'Create Short', onSelect: () => app.open({ kind: 'upload', short: true }) },
-      { icon: 'sensors', label: 'Go live', onSelect: () => router.push('/studio/live') },
-      { icon: 'edit_note', label: 'Create post', onSelect: () => app.open({ kind: 'post' }) },
-      { icon: 'add_circle', label: 'Create story', trailing: eligible ? undefined : <Icon name="lock" size={18} />, onSelect: () => app.open({ kind: 'story' }) },
+      { icon: 'upload', label: 'Upload video', onSelect: need(() => app.open({ kind: 'upload' })) },
+      { icon: <ShortsIcon />, label: 'Create Short', onSelect: need(() => app.open({ kind: 'upload', short: true })) },
+      { icon: 'sensors', label: 'Go live', onSelect: need(() => router.push('/studio/live')) },
+      { icon: 'edit_note', label: 'Create post', onSelect: need(() => app.open({ kind: 'post' })) },
+      { icon: 'add_circle', label: 'Create story', trailing: eligible ? undefined : <Icon name="lock" size={18} />, onSelect: need(() => app.open({ kind: 'story' })) },
     ]} />
   );
 }
 
-function NotificationsMenu({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
-  const d = useDB();
+function NotificationsMenu({ anchor, onClose, onRead }: { anchor: HTMLElement; onClose: () => void; onRead: () => void }) {
   const app = useApp();
   const router = useRouter();
-  const items = notificationsFor(d);
-  const [menuFor, setMenuFor] = useState<{ el: HTMLElement; id: string; channelId: string } | null>(null);
+  const [items, setItems] = useState<Notification[] | null>(null);
+  const [menuFor, setMenuFor] = useState<{ el: HTMLElement; n: Notification } | null>(null);
   useEffect(() => {
-    const t = setTimeout(() => update((db) => {
-      db.user.readNotifications = [...new Set([...db.user.readNotifications, ...items.map((n) => n.id)])];
-    }), 2000);
-    return () => clearTimeout(t);
-  }, [items]);
+    let alive = true;
+    loadNotifications().then((r) => {
+      if (!alive || !r.ok) return;
+      setItems(r.data);
+      const unread = r.data.filter((n) => !n.read).map((n) => n.key);
+      if (unread.length) markNotificationsRead(unread).then(onRead);
+    });
+    return () => { alive = false; };
+  }, [onRead]);
   return (
     <Menu anchor={anchor} onClose={onClose} className="notif-menu" header={
-      <div className="notif-head"><span>Notifications</span><Link href="/account#notifications" onClick={onClose} className="icon-btn" aria-label="Settings" data-tooltip="Settings"><Icon name="settings" /></Link></div>
+      <div className="notif-head"><span>Notifications</span><Link href="/account#notifications" onClick={onClose} className="icon-btn" aria-label="Notification settings" data-tooltip="Settings"><Icon name="settings" /></Link></div>
     }>
-      {items.length === 0 ? (
-        <div className="notif-empty"><Icon name="notifications" size={96} /><h3>Your notifications live here</h3><p className="muted">Subscribe to your favorite channels to get notified about their latest videos.</p></div>
-      ) : items.map((n) => (
-        <div key={n.id} className={`notif ${d.user.readNotifications.includes(n.id) ? '' : 'unread'}`} onClick={() => {
-          onClose();
-          if (n.href.startsWith('?story=')) app.openStory(n.channelId); else router.push(n.href);
-        }}>
-          <Avatar channel={d.channels[n.channelId]} size={48} />
-          <div className="notif-text">{n.text}<small>{timeAgo(n.at)}</small></div>
-          {n.thumbnail && <MediaImg src={n.thumbnail} className="notif-thumb" />}
-          <IconButton icon="more_vert" label="Action menu" onClick={(e) => { e.stopPropagation(); setMenuFor({ el: e.currentTarget, id: n.id, channelId: n.channelId }); }} />
-        </div>
-      ))}
-      {menuFor && <Menu anchor={menuFor.el} onClose={() => setMenuFor(null)} sheet={false} items={[
-        { icon: 'visibility_off', label: 'Hide this notification', onSelect: () => update((db) => { db.user.dismissedNotifications.push(menuFor.id); }) },
-        { icon: 'notifications_off', label: `Turn off all from ${d.channels[menuFor.channelId].name}`, onSelect: () => update((db) => { db.user.bells[menuFor.channelId] = 'none'; }) },
-      ]} />}
+      {(close) => (
+        <>
+          {items === null && <div className="center-pad"><Spinner /></div>}
+          {items?.length === 0 && <div className="notif-empty"><Icon name="notifications" size={96} /><h3>Your notifications live here</h3><p className="muted">Subscribe to your favorite channels to hear about their latest videos.</p></div>}
+          {items?.map((n) => (
+            <div key={n.key} className={`notif ${n.read ? '' : 'unread'}`} role="menuitem" tabIndex={0}
+              onClick={() => { close(); if (n.href.startsWith('story:')) app.openStory(n.channel.id); else router.push(n.href); }}>
+              <Avatar channel={n.channel} size={48} />
+              <div className="notif-text">{n.text}<small><Ago ts={n.at} /></small></div>
+              {n.thumbnail && <img src={n.thumbnail} alt="" className="notif-thumb" loading="lazy" />}
+              <IconButton icon="more_vert" label="Action menu" onClick={(e) => { e.stopPropagation(); setMenuFor({ el: e.currentTarget, n }); }} />
+            </div>
+          ))}
+          {menuFor && <Menu anchor={menuFor.el} onClose={() => setMenuFor(null)} sheet={false} items={[
+            { icon: 'visibility_off', label: 'Hide this notification', onSelect: () => { setItems((x) => x?.filter((y) => y.key !== menuFor.n.key) ?? null); void dismissNotification(menuFor.n.key); } },
+            { icon: 'notifications_off', label: `Turn off all from ${menuFor.n.channel.name}`, onSelect: () => { setItems((x) => x?.filter((y) => y.channel.id !== menuFor.n.channel.id) ?? null); void setBell(menuFor.n.channel.id, 'none'); } },
+          ]} />}
+        </>
+      )}
     </Menu>
   );
 }
@@ -197,56 +198,81 @@ const THEMES: { id: Theme; label: string }[] = [
   { id: 'light', label: 'Light theme' },
 ];
 
-function AccountMenu({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
-  const d = useDB();
+export function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  void setTheme(theme);
+}
+
+function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }) {
   const app = useApp();
-  const me = myChannel(d);
+  const router = useRouter();
   const [view, setView] = useState<'main' | 'theme'>('main');
-  const theme = THEMES.find((t) => t.id === d.user.theme)!;
+  const [theme, setThemeState] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme) ?? 'dark');
+  const me = app.me!;
   if (view === 'theme') {
     return (
       <Menu anchor={anchor} onClose={onClose} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Appearance</span></div>}
-        items={[{ label: <span className="muted small">Setting applies to this browser only</span>, keepOpen: true }, ...THEMES.map((t) => ({ label: t.label, checked: t.id === d.user.theme, icon: '', onSelect: () => update((db) => { db.user.theme = t.id; }) }))]} />
+        items={THEMES.map((t) => ({ icon: '', label: t.label, checked: t.id === theme, keepOpen: true, onSelect: () => { setThemeState(t.id); applyTheme(t.id); } }))} />
     );
   }
   const items: MenuItem[] = [
     { icon: 'account_box', label: 'Your channel', href: `/${me.handle}` },
-    { icon: 'smart_display', label: 'Vidora Studio', href: '/studio' },
+    { icon: 'video_settings', label: 'Vidora Studio', href: '/studio' },
+    { icon: 'chat', label: 'Messages', href: '/messages' },
+    { icon: 'logout', label: 'Sign out', onSelect: async () => { await signOut(); router.push('/'); router.refresh(); } },
     { divider: true, label: '' },
-    { icon: d.user.theme === 'light' ? 'light_mode' : 'dark_mode', label: `Appearance: ${theme.label.replace(' theme', '')}`, trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('theme') },
+    { icon: theme === 'light' ? 'light_mode' : 'dark_mode', label: `Appearance: ${THEMES.find((t) => t.id === theme)!.label.replace(' theme', '')}`, trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('theme') },
     { icon: 'keyboard', label: 'Keyboard shortcuts', onSelect: () => app.open({ kind: 'shortcuts' }) },
     { divider: true, label: '' },
     { icon: 'settings', label: 'Settings', href: '/account' },
     { icon: 'info', label: 'About & credits', href: '/about' },
   ];
   return (
-    <Menu anchor={anchor} onClose={onClose} className="account-menu" header={
+    <Menu anchor={anchor} onClose={onClose} className="account-menu" items={items} header={
       <div className="account-head">
         <Avatar channel={me} size={40} />
         <div><div className="account-name">{me.name}</div><div>{me.handle}</div><Link href={`/${me.handle}`} onClick={onClose} className="link">View your channel</Link></div>
       </div>
-    } items={items} />
+    } />
   );
 }
 
+/* ---------------- Badges (polled while the tab is visible) ---------------- */
+function useBadges(initial: { notifications: number; messages: number }, signedIn: boolean) {
+  const [counts, setCounts] = useState(initial);
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      badgeCounts().then((r) => alive && r.ok && setCounts(r.data));
+    };
+    tick();
+    const t = setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', tick); };
+  }, [signedIn, pathname]);
+  return [counts, setCounts] as const;
+}
+
 /* ---------------- Masthead ---------------- */
-export function Masthead() {
-  const d = useDB();
+export function Masthead({ badges: initialBadges }: { badges: { notifications: number; messages: number } }) {
+  const app = useApp();
   const pathname = usePathname();
   const params = useSearchParams();
-  const searchKey = pathname === '/results' ? params.get('search_query') ?? '' : pathname;
-  const app = useApp();
-  const mobile = useIsMobile();
   const [menu, setMenu] = useState<{ kind: 'create' | 'notif' | 'account'; el: HTMLElement } | null>(null);
-  const [mSearch, setMSearch] = useState(false);
-  const unread = notificationsFor(d).filter((n) => !d.user.readNotifications.includes(n.id)).length;
+  const [mobileSearch, setMobileSearch] = useState(false);
+  const [badges, setBadges] = useBadges(initialBadges, !!app.me);
+  const query = pathname === '/results' ? params.get('search_query') ?? '' : '';
   const close = () => setMenu(null);
+  const badge = (n: number) => (n > 0 ? <span className="badge">{n > 9 ? '9+' : n}</span> : null);
 
-  if (mobile && mSearch) {
+  if (mobileSearch) {
     return (
       <header className="masthead msearch">
-        <IconButton icon="arrow_back" label="Back" onClick={() => setMSearch(false)} />
-        <SearchBox autoFocus onDone={() => setMSearch(false)} />
+        <IconButton icon="arrow_back" label="Back" onClick={() => setMobileSearch(false)} />
+        <SearchBox initial={query} autoFocus onDone={() => setMobileSearch(false)} />
       </header>
     );
   }
@@ -256,32 +282,40 @@ export function Masthead() {
         <IconButton icon="menu" label="Guide" className="guide-btn" onClick={() => app.setDrawer(!app.drawer)} />
         <Logo />
       </div>
-      <div className="mh-center"><SearchBox key={searchKey} /></div>
+      <div className="mh-center"><SearchBox key={query} initial={query} /></div>
       <div className="mh-end">
-        <IconButton icon="search" label="Search" className="mobile-only" onClick={() => setMSearch(true)} />
+        <IconButton icon="search" label="Search" className="mobile-only" onClick={() => setMobileSearch(true)} />
         <button type="button" className="btn btn-tonal btn-md create-btn desktop-only" onClick={(e) => setMenu({ kind: 'create', el: e.currentTarget })}>
           <Icon name="add" /><span className="btn-label">Create</span>
         </button>
-        <button type="button" className="icon-btn notif-btn" aria-label="Notifications" data-tooltip="Notifications" onClick={(e) => setMenu({ kind: 'notif', el: e.currentTarget })}>
-          <Icon name="notifications" />
-          {unread > 0 && <span className="badge">{unread > 9 ? '9+' : unread}</span>}
-        </button>
-        <button type="button" className="avatar-btn desktop-only" aria-label="Account menu" onClick={(e) => setMenu({ kind: 'account', el: e.currentTarget })}>
-          <Avatar channel={myChannel(d)} size={32} />
-        </button>
+        {app.me ? (
+          <>
+            <Link href="/messages" className="icon-btn badge-btn" aria-label="Messages" data-tooltip="Messages"><Icon name="chat" />{badge(badges.messages)}</Link>
+            <button type="button" className="icon-btn badge-btn" aria-label="Notifications" data-tooltip="Notifications" onClick={(e) => setMenu({ kind: 'notif', el: e.currentTarget })}>
+              <Icon name="notifications" />{badge(badges.notifications)}
+            </button>
+            <button type="button" className="avatar-btn desktop-only" aria-label="Account menu" onClick={(e) => setMenu({ kind: 'account', el: e.currentTarget })}>
+              <Avatar channel={app.me} size={32} />
+            </button>
+          </>
+        ) : (
+          <Link href={`/signin?next=${encodeURIComponent(pathname)}`} className="btn btn-outline btn-md sign-in-btn"><Icon name="account_circle" />Sign in</Link>
+        )}
       </div>
       {menu?.kind === 'create' && <CreateMenu anchor={menu.el} onClose={close} />}
-      {menu?.kind === 'notif' && <NotificationsMenu anchor={menu.el} onClose={close} />}
+      {menu?.kind === 'notif' && <NotificationsMenu anchor={menu.el} onClose={close} onRead={() => setBadges((b) => ({ ...b, notifications: 0 }))} />}
       {menu?.kind === 'account' && <AccountMenu anchor={menu.el} onClose={close} />}
     </header>
   );
 }
 
-/* ---------------- Guide (sidebar) ---------------- */
+/* ---------------- Guide ---------------- */
+export type GuideMode = 'full' | 'mini' | 'drawer' | 'none';
+
 function GuideLink({ href, icon, label, active, trailing, mini }: { href: string; icon: ReactNode; label: string; active?: boolean; trailing?: ReactNode; mini?: boolean }) {
   const app = useApp();
   return (
-    <Link href={href} className={`g-item ${active ? 'active' : ''} ${mini ? 'mini' : ''}`} title={label} onClick={() => app.setDrawer(false)}>
+    <Link href={href} className={`g-item ${active ? 'active' : ''} ${mini ? 'mini' : ''}`} title={label} aria-current={active ? 'page' : undefined} onClick={() => app.setDrawer(false)}>
       <span className="g-icon">{icon}</span>
       <span className="g-label">{label}</span>
       {trailing}
@@ -289,78 +323,79 @@ function GuideLink({ href, icon, label, active, trailing, mini }: { href: string
   );
 }
 
-export type GuideMode = 'full' | 'mini' | 'drawer' | 'none';
-
-export function Guide({ mode }: { mode: GuideMode }) {
-  const d = useDB();
+export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions: GuideChannel[] }) {
   const app = useApp();
-  const path = usePathname();
+  const path = decodeURIComponent(usePathname());
   const params = useSearchParams();
-  const me = myChannel(d);
-  const subs = d.user.subscriptions.map((id) => d.channels[id]).filter(Boolean);
   const [showAll, setShowAll] = useState(false);
-  const storyChannels = new Set(activeStories(d).map((g) => g.channelId));
-  const isActive = (p: string) => path === p;
   const list = path === '/playlist' ? params.get('list') : null;
+  const is = (p: string) => path === p;
 
   if (mode === 'none') return null;
   if (mode === 'mini') {
     return (
       <nav className="guide-mini" aria-label="Main">
-        <GuideLink mini href="/" icon={<Icon name="home" filled={isActive('/')} />} label="Home" active={isActive('/')} />
+        <GuideLink mini href="/" icon={<Icon name="home" filled={is('/')} />} label="Home" active={is('/')} />
         <GuideLink mini href="/shorts" icon={<ShortsIcon filled={path.startsWith('/shorts')} />} label="Shorts" active={path.startsWith('/shorts')} />
-        <GuideLink mini href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={isActive('/feed/subscriptions')} />} label="Subscriptions" active={isActive('/feed/subscriptions')} />
-        <GuideLink mini href="/feed/you" icon={<Icon name="account_circle" filled={isActive('/feed/you')} />} label="You" active={isActive('/feed/you')} />
+        <GuideLink mini href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={is('/feed/subscriptions')} />} label="Subscriptions" active={is('/feed/subscriptions')} />
+        <GuideLink mini href="/feed/you" icon={<Icon name="account_circle" filled={is('/feed/you')} />} label="You" active={is('/feed/you')} />
       </nav>
     );
   }
-  const shown = showAll ? subs : subs.slice(0, 7);
+  const shown = showAll ? subscriptions : subscriptions.slice(0, 7);
+  const me = app.me;
   return (
     <>
-      {mode === 'drawer' && app.drawer && <div className="scrim" onClick={() => app.setDrawer(false)} />}
-      <nav className={`guide ${mode === 'drawer' ? 'drawer' : ''} ${mode === 'drawer' && app.drawer ? 'open' : ''}`} aria-label="Main">
+      {mode === 'drawer' && <div className={`scrim ${app.drawer ? 'open' : ''}`} onClick={() => app.setDrawer(false)} />}
+      <nav className={`guide ${mode === 'drawer' ? 'drawer' : ''} ${mode === 'drawer' && app.drawer ? 'open' : ''}`} aria-label="Main" inert={mode === 'drawer' && !app.drawer ? true : undefined}>
         {mode === 'drawer' && <div className="drawer-head"><IconButton icon="menu" label="Guide" onClick={() => app.setDrawer(false)} /><Logo /></div>}
         <div className="g-section">
-          <GuideLink href="/" icon={<Icon name="home" filled={isActive('/')} />} label="Home" active={isActive('/')} />
+          <GuideLink href="/" icon={<Icon name="home" filled={is('/')} />} label="Home" active={is('/')} />
           <GuideLink href="/shorts" icon={<ShortsIcon filled={path.startsWith('/shorts')} />} label="Shorts" active={path.startsWith('/shorts')} />
-          <GuideLink href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={isActive('/feed/subscriptions')} />} label="Subscriptions" active={isActive('/feed/subscriptions')} />
+          <GuideLink href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={is('/feed/subscriptions')} />} label="Subscriptions" active={is('/feed/subscriptions')} />
         </div>
         <div className="g-section">
           <Link href="/feed/you" className="g-title" onClick={() => app.setDrawer(false)}>You <Icon name="chevron_right" size={20} /></Link>
-          <GuideLink href={`/${me.handle}`} icon={<Icon name="account_box" />} label="Your channel" active={decodeURIComponent(path) === `/${me.handle}`} />
-          <GuideLink href="/feed/history" icon={<Icon name="history" />} label="History" active={isActive('/feed/history')} />
-          <GuideLink href="/feed/playlists" icon={<Icon name="playlist_play" />} label="Playlists" active={isActive('/feed/playlists')} />
-          <GuideLink href="/studio/content" icon={<Icon name="smart_display" />} label="Your videos" />
-          <GuideLink href="/playlist?list=WL" icon={<Icon name="schedule" filled={list === 'WL'} />} label="Watch later" active={list === 'WL'} />
-          <GuideLink href="/playlist?list=LL" icon={<Icon name="thumb_up" filled={list === 'LL'} />} label="Liked videos" active={list === 'LL'} />
-          <GuideLink href="/feed/downloads" icon={<Icon name="download" />} label="Downloads" active={isActive('/feed/downloads')} />
-        </div>
-        <div className="g-section">
-          <div className="g-title">Subscriptions</div>
-          {subs.length === 0 && <p className="g-note">Channels you subscribe to show up here.</p>}
-          {shown.map((c) => (
-            <GuideLink key={c.id} href={`/${c.handle}`} icon={<Avatar channel={c} size={24} ring={storyChannels.has(c.id) ? 'unseen' : null} />} label={c.name}
-              active={decodeURIComponent(path).startsWith(`/${c.handle}`)}
-              trailing={d.videos.some((v) => v.channelId === c.id && Date.now() - v.publishedAt < 7 * 86_400_000) ? <span className="g-dot" aria-label="New content" /> : undefined} />
-          ))}
-          {subs.length > 7 && (
-            <button type="button" className="g-item" onClick={() => setShowAll(!showAll)}>
-              <span className="g-icon"><Icon name={showAll ? 'expand_less' : 'expand_more'} /></span>
-              <span className="g-label">{showAll ? 'Show fewer' : `Show ${subs.length - 7} more`}</span>
-            </button>
+          {me ? (
+            <>
+              <GuideLink href={`/${me.handle}`} icon={<Icon name="account_box" />} label="Your channel" active={is(`/${me.handle}`)} />
+              <GuideLink href="/feed/history" icon={<Icon name="history" />} label="History" active={is('/feed/history')} />
+              <GuideLink href="/feed/playlists" icon={<Icon name="playlist_play" />} label="Playlists" active={is('/feed/playlists')} />
+              <GuideLink href="/studio/content" icon={<Icon name="smart_display" />} label="Your videos" />
+              <GuideLink href="/playlist?list=WL" icon={<Icon name="schedule" filled={list === 'WL'} />} label="Watch later" active={list === 'WL'} />
+              <GuideLink href="/playlist?list=LL" icon={<Icon name="thumb_up" filled={list === 'LL'} />} label="Liked videos" active={list === 'LL'} />
+              <GuideLink href="/messages" icon={<Icon name="chat" filled={path.startsWith('/messages')} />} label="Messages" active={path.startsWith('/messages')} />
+            </>
+          ) : (
+            <div className="g-signin">
+              <p>Sign in to like videos, comment, subscribe and send messages.</p>
+              <Link href="/signin" className="btn btn-outline btn-md"><Icon name="account_circle" />Sign in</Link>
+            </div>
           )}
-          <GuideLink href="/feed/channels" icon={<Icon name="format_list_bulleted" />} label="All subscriptions" active={isActive('/feed/channels')} />
         </div>
+        {me && (
+          <div className="g-section">
+            <div className="g-title">Subscriptions</div>
+            {subscriptions.length === 0 && <p className="g-note">Channels you subscribe to show up here.</p>}
+            {shown.map((c) => (
+              <GuideLink key={c.id} href={`/${c.handle}`} icon={<Avatar channel={c} size={24} ring={c.story === 'unseen' ? 'unseen' : null} />} label={c.name}
+                active={path.startsWith(`/${c.handle}`)} trailing={c.hasNew ? <span className="g-dot" aria-label="New content" /> : undefined} />
+            ))}
+            {subscriptions.length > 7 && (
+              <button type="button" className="g-item" onClick={() => setShowAll(!showAll)}>
+                <span className="g-icon"><Icon name={showAll ? 'expand_less' : 'expand_more'} /></span>
+                <span className="g-label">{showAll ? 'Show fewer' : `Show ${subscriptions.length - 7} more`}</span>
+              </button>
+            )}
+            <GuideLink href="/feed/channels" icon={<Icon name="format_list_bulleted" />} label="All subscriptions" active={is('/feed/channels')} />
+          </div>
+        )}
         <div className="g-section">
           <GuideLink href="/studio" icon={<Icon name="video_settings" />} label="Vidora Studio" />
-          <GuideLink href="/account" icon={<Icon name="settings" />} label="Settings" active={isActive('/account')} />
-          <GuideLink href="/about" icon={<Icon name="info" />} label="About & credits" active={isActive('/about')} />
+          <GuideLink href="/account" icon={<Icon name="settings" />} label="Settings" active={is('/account')} />
+          <GuideLink href="/about" icon={<Icon name="info" />} label="About & credits" active={is('/about')} />
         </div>
-        <footer className="g-footer">
-          Video footage: NASA (public domain).<br />
-          Icons: Material Symbols (Apache 2.0). Font: Roboto.<br />
-          <span className="g-copy">Vidora is an independent project.</span>
-        </footer>
+        <footer className="g-footer">Video footage: NASA (public domain). Icons: Material Symbols. Font: Roboto.</footer>
       </nav>
     </>
   );
@@ -368,18 +403,19 @@ export function Guide({ mode }: { mode: GuideMode }) {
 
 /* ---------------- Bottom nav (phones) ---------------- */
 export function BottomNav() {
-  const path = usePathname();
-  const d = useDB();
+  const path = decodeURIComponent(usePathname());
+  const app = useApp();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const me = myChannel(d);
-  const youActive = path === '/feed/you' || decodeURIComponent(path) === `/${me.handle}`;
+  const mobile = useIsMobile();
+  if (!mobile) return null;
+  const youActive = path === '/feed/you' || (!!app.me && path === `/${app.me.handle}`);
   return (
     <nav className={`bottom-nav ${path.startsWith('/shorts') ? 'on-dark' : ''}`} aria-label="Primary">
       <Link href="/" className={path === '/' ? 'on' : ''}><Icon name="home" filled={path === '/'} /><span>Home</span></Link>
       <Link href="/shorts" className={path.startsWith('/shorts') ? 'on' : ''}><ShortsIcon filled={path.startsWith('/shorts')} /><span>Shorts</span></Link>
       <button type="button" className="bn-create" aria-label="Create" onClick={(e) => setAnchor(e.currentTarget)}><span className="bn-plus"><Icon name="add" size={28} /></span></button>
       <Link href="/feed/subscriptions" className={path === '/feed/subscriptions' ? 'on' : ''}><Icon name="subscriptions" filled={path === '/feed/subscriptions'} /><span>Subscriptions</span></Link>
-      <Link href="/feed/you" className={youActive ? 'on' : ''}><Avatar channel={me} size={24} /><span>You</span></Link>
+      <Link href="/feed/you" className={youActive ? 'on' : ''}>{app.me ? <Avatar channel={app.me} size={24} /> : <Icon name="account_circle" filled={youActive} />}<span>You</span></Link>
       {anchor && <CreateMenu anchor={anchor} onClose={() => setAnchor(null)} />}
     </nav>
   );
