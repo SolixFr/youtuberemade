@@ -4,7 +4,7 @@ export type VideoType = 'video' | 'short';
 export type Visibility = 'public' | 'unlisted' | 'private';
 export type BellLevel = 'all' | 'personalized' | 'none';
 export type Theme = 'dark' | 'light' | 'system';
-export type StoryState = 'unseen' | 'seen' | null;
+export type StoryState = 'unseen' | 'seen' | 'live' | null;
 export type MessagePolicy = 'everyone' | 'subscriptions' | 'none';
 
 export interface ChannelLite {

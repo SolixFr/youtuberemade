@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useApp } from '@/components/app-context';
@@ -8,8 +9,17 @@ import { formatCount, formatDate } from '@/lib/format';
 import { joinChannel, leaveChannel } from '@/lib/actions/social';
 import type { Channel } from '@/lib/types';
 
-export function ChannelHeaderAvatar({ channel }: { channel: Channel }) {
+/** The channel avatar. Live: tapping opens the live room. Otherwise: stories if present. */
+export function ChannelHeaderAvatar({ channel, live = false }: { channel: Channel; live?: boolean }) {
   const app = useApp();
+  if (live) {
+    return (
+      <Link href={`/${channel.handle}/live`} className="ch-avatar ch-avatar-live" aria-label="Watch live">
+        <Avatar channel={channel} size={160} ring="live" />
+        <span className="ch-live-chip"><Icon name="sensors" size={14} />LIVE</span>
+      </Link>
+    );
+  }
   if (!channel.story) return <span className="ch-avatar"><Avatar channel={channel} size={160} /></span>;
   return (
     <button type="button" className="ch-avatar" onClick={() => app.openStory(channel.id)} aria-label="View story">

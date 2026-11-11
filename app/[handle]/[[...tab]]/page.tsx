@@ -280,7 +280,7 @@ export default async function ChannelPage({ params, searchParams }: Props) {
     <div className="channel">
       <div className="ch-banner">{c.banner && <img src={c.banner} alt="" />}</div>
       <header className="ch-header">
-        <ChannelHeaderAvatar channel={c} />
+        <ChannelHeaderAvatar channel={c} live={!!live} />
         <div className="ch-info">
           <h1>{c.name}{c.verified && <VerifiedBadge />}</h1>
           <div className="ch-line"><b>{c.handle}</b>{c.pronouns && <> · {c.pronouns}</>} · {formatCount(c.subscribers)} subscribers · {all.length} video{all.length === 1 ? '' : 's'}</div>
@@ -289,7 +289,6 @@ export default async function ChannelPage({ params, searchParams }: Props) {
           </Link>
           {c.links[0] && <div className="ch-links"><a href={c.links[0].url} target="_blank" rel="noopener noreferrer nofollow">{c.links[0].url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>{c.links.length > 1 && <span className="muted"> and {c.links.length - 1} more</span>}</div>}
           <div className="ch-buttons">
-            {live && <Link href={`/${c.handle}/live`} className="btn btn-live btn-md"><Icon name="sensors" size={20} />LIVE</Link>}
             <SubscribeButton channel={c} initial={subscriptionState(me?.id, c.id)} />
             {!mine && elig.memberships && tiers.length > 0 && <JoinButton channelId={c.id} name={c.name} tiers={tiers} initialMember={membershipState(me?.id, c.id)} avatar={c.avatar} banner={c.banner} />}
             <Link href={`/${c.handle}/community`} className="btn btn-tonal btn-md"><Icon name="groups" />Community</Link>
