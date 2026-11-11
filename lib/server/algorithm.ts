@@ -151,8 +151,13 @@ function tick() {
     const reach = (1.6 + q * 2.4) * decay * rand(0.4, 1.6) + (p.subs / 180_000) * decay * Math.random();
     const views = Math.round(reach);
     if (views <= 0) continue;
-    const subs = Math.round(views * (0.008 + q * 0.02) * rand(0.5, 1.3));
-    if (subs > 0) sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, p.channel_id);
+    sql('UPDATE posts SET views = views + ? WHERE id = ?').run(views, p.id);
+    const subsFloat = views * (0.012 + q * 0.03) * rand(0.5, 1.3);
+    const subs = Math.floor(subsFloat) + (Math.random() < (subsFloat % 1) ? 1 : 0);
+    if (subs > 0) {
+      sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, p.channel_id);
+      sql('UPDATE posts SET subs_gained = subs_gained + ? WHERE id = ?').run(subs, p.id);
+    }
   }
 
   // --- live streams: a simulated audience while you're on air ---
@@ -249,6 +254,15 @@ function tick() {
     let velocity = (p.subs / 60_000) * decay * rand(1.5, 4);
     velocity += ageHours < 6 ? 3 : ageHours < 24 ? 1 : 0.2;
     if (p.subs < 1000) velocity += 1.5 * decay;
+
+    // Engagement converts a slice of that reach into subscribers.
+    const subsFloat = velocity * (0.008 + q * 0.02);
+    const subs = Math.floor(subsFloat) + (Math.random() < (subsFloat % 1) ? 1 : 0);
+    if (subs > 0) {
+      sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, p.channel_id);
+      sql('UPDATE posts SET subs_gained = subs_gained + ? WHERE id = ?').run(subs, p.id);
+      sql('UPDATE posts SET views = views + ? WHERE id = ?').run(Math.round(velocity * rand(0.6, 1.4)), p.id);
+    }
 
     const likes = Math.round(velocity * (0.02 + q * 0.06) * rand(0.4, 1.2));
     if (likes > 0) sql('UPDATE posts SET likes = likes + ? WHERE id = ?').run(likes, p.id);

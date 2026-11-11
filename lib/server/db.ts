@@ -341,6 +341,8 @@ function open(): Database.Database {
   if (liveCols.length && !liveCols.includes('video_id')) db.exec('ALTER TABLE live_sessions ADD COLUMN video_id TEXT');
   const postCols = (db.pragma('table_info(posts)') as { name: string }[]).map((c) => c.name);
   if (!postCols.includes('members_only')) db.exec('ALTER TABLE posts ADD COLUMN members_only INTEGER NOT NULL DEFAULT 0');
+  if (!postCols.includes('views')) db.exec('ALTER TABLE posts ADD COLUMN views INTEGER NOT NULL DEFAULT 0');
+  if (!postCols.includes('subs_gained')) db.exec('ALTER TABLE posts ADD COLUMN subs_gained INTEGER NOT NULL DEFAULT 0');
   // Backfill default membership tiers for channels created before this existed.
   const untiered = db.prepare('SELECT id FROM users WHERE NOT EXISTS (SELECT 1 FROM channel_tiers t WHERE t.channel_id = users.id)').all() as { id: string }[];
   if (untiered.length) {

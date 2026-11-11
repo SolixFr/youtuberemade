@@ -253,6 +253,20 @@ export function posts(viewer: string | null | undefined, filter: { channel?: str
   });
 }
 
+/** Creator-only stats for a single post: reach, likes, comments, subscribers gained, poll breakdown. */
+export function postAnalytics(postId: string) {
+  const p = sql('SELECT p.views, p.subs_gained, p.likes, (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) comments FROM posts p WHERE p.id = ?')
+    .get(postId) as { views: number; subs_gained: number; likes: number; comments: number } | undefined;
+  if (!p) return null;
+  const opts = sql('SELECT idx, text, votes FROM poll_options WHERE post_id = ? ORDER BY idx').all(postId) as { idx: number; text: string; votes: number }[];
+  const total = opts.reduce((n, o) => n + o.votes, 0);
+  return {
+    views: p.views, subscribers: p.subs_gained, likes: p.likes, comments: p.comments,
+    poll: opts.map((o) => ({ ...o, pct: total ? Math.round((o.votes / total) * 100) : 0 })),
+    pollTotal: total,
+  };
+}
+
 export function postComments(postId: string, viewer?: string | null): PostComment[] {
   return (sql(`SELECT pc.id, pc.text, pc.created_at, pc.author_id, p.channel_id, p.members_only, u.name, u.handle, u.avatar, m.tier member_tier, t.name member_name
     FROM post_comments pc JOIN posts p ON p.id = pc.post_id JOIN users u ON u.id = pc.author_id

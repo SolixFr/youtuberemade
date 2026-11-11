@@ -1822,3 +1822,19 @@ a.earn-pill.link:hover { filter: brightness(1.15); }
 .p-stats pre { margin: 0; font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 .p-stats-close { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: transparent; box-shadow: none; }
 .p-stats-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+
+/* Post analytics panel (post page, owner only) */
+.post-analytics { border: 1px solid var(--divider); border-radius: 12px; background: var(--bg-raised); padding: 18px; margin-top: 18px; }
+.post-analytics h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+.pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pa-stat { background: var(--tonal); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.pa-stat b { font-size: 22px; font-weight: 500; letter-spacing: -0.2px; }
+.pa-stat span { font-size: 12px; color: var(--text-2); }
+.pa-poll { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.pa-poll h3 { font-size: 13px; margin: 0; color: var(--text-2); font-weight: 500; }
+.pa-option-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.pa-option-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-bar { height: 8px; border-radius: 4px; background: var(--tonal); overflow: hidden; margin-top: 4px; }
+.pa-fill { height: 100%; background: var(--blue); border-radius: 4px; }
+@media (max-width: 640px) { .pa-stats { grid-template-columns: repeat(2, 1fr); } }
