@@ -1188,7 +1188,6 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
 
   .feed-chips { top: 48px; padding: 0 12px; }
   .chips { gap: 8px; padding: 8px 0; }
-  .chips-arrow { display: none; }
   .feed { padding: 0 0 24px; }
   .grid { gap: 0; padding-top: 0; }
   /* YouTube's phone feed: inset cards with rounded thumbnails */

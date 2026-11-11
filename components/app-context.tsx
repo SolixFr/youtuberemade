@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { badgeCounts } from '@/lib/actions/account';
 import type { Me } from '@/lib/types';
 
@@ -49,14 +49,9 @@ interface AppApi {
   setQueue: (q: QueueItem[]) => void;
 }
 
-const COLLAPSE_EVENT = 'vidora-guide-collapsed';
-function subscribeCollapsed(cb: () => void) {
-  window.addEventListener('storage', cb);
-  window.addEventListener(COLLAPSE_EVENT, cb);
-  return () => { window.removeEventListener('storage', cb); window.removeEventListener(COLLAPSE_EVENT, cb); };
-}
+const COLLAPSE_STORAGE_KEY = 'vidora-guide-collapsed';
 function readCollapsed(): boolean {
-  try { return localStorage.getItem('vidora-guide-collapsed') === '1'; } catch { return false; }
+  try { return localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1'; } catch { return false; }
 }
 
 const Ctx = createContext<AppApi | null>(null);
@@ -77,12 +72,21 @@ export function AppProvider({ me: initialMe, children }: { me: Me | null; childr
   const [story, setStory] = useState<string | null>(null);
   const [mini, setMini] = useState<MiniState | null>(null);
   const [drawer, setDrawer] = useState(false);
-  // Server renders the full guide; the stored preference is applied after hydration.
-  const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
+  // Server renders the full guide; the stored preference is applied after mount.
+  const [collapsed, setCollapsedState] = useState(false);
+  useEffect(() => {
+    const apply = () => setCollapsedState(readCollapsed());
+    const id = requestAnimationFrame(apply);
+    const sync = () => apply();
+    window.addEventListener('storage', sync);
+    return () => { cancelAnimationFrame(id); window.removeEventListener('storage', sync); };
+  }, []);
   const setCollapsed = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
-    const next = typeof v === 'function' ? v(readCollapsed()) : v;
-    try { localStorage.setItem('vidora-guide-collapsed', next ? '1' : '0'); } catch { /* storage blocked */ }
-    window.dispatchEvent(new Event(COLLAPSE_EVENT));
+    setCollapsedState((prev) => {
+      const next = typeof v === 'function' ? v(readCollapsed()) : v;
+      try { localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0'); } catch { /* storage blocked */ }
+      return next;
+    });
   }, []);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const open = useCallback((d: DialogState) => setDialog(d), []);
