@@ -20,9 +20,9 @@ export interface StudioAnalyticsData {
   since: number;
 }
 
-const fmtInt = (n: number) => Math.round(n).toLocaleString();
-const fmtViews = (n: number) => n >= 100_000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString();
-const fmtHours = (n: number) => n.toLocaleString('en', { maximumFractionDigits: 1 });
+const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US');
+const fmtViews = (n: number) => n >= 100_000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString('en-US');
+const fmtHours = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 1 });
 const fmtTime = (s: number) => { const d = Math.floor(s / 60), r = Math.floor(s % 60); return `${d}:${String(r).padStart(2, '0')}`; };
 const DAY = 86_400_000;
 const daysUnit = (ms: number) => { const d = Math.floor(ms / DAY); const h = Math.floor((ms % DAY) / 3_600_000); return d > 0 ? `First ${d} days${h ? ` ${h} hours` : ''}` : h > 0 ? `First ${h} hours` : 'Just published'; };
@@ -30,8 +30,8 @@ const daysUnit = (ms: number) => { const d = Math.floor(ms / DAY); const h = Mat
 function MetricBlock({ data, tab }: { data: StudioAnalyticsData; tab: 'views' | 'hours' | 'subs' | 'revenue' }) {
   if (tab === 'views') return <MetricRow total={fmtViews(data.viewsNow)} delta={data.vTyp.delta} deltaText={`${fmtViews(Math.abs(data.vTyp.delta))} ${data.vTyp.delta >= 0 ? 'more' : 'less'} than usual`} lo={fmtInt(data.vTyp.lo)} hi={fmtInt(data.vTyp.hi)} />;
   if (tab === 'hours') return <MetricRow total={fmtHours(data.hoursNow)} delta={data.hTyp.delta} deltaText={`${fmtHours(Math.abs(data.hTyp.delta))} hours ${data.hTyp.delta >= 0 ? 'more' : 'less'} than usual`} lo={fmtHours(data.hTyp.lo)} hi={fmtHours(data.hTyp.hi)} />;
-  if (tab === 'subs') return <MetricRow total={`+${data.subsNow.toLocaleString()}`} delta={data.sTyp.delta} deltaText={`${Math.abs(data.sTyp.delta)} ${data.sTyp.delta >= 0 ? 'more' : 'less'} than usual`} lo={String(data.sTyp.lo)} hi={String(data.sTyp.hi)} />;
-  return <div className="am-metric-block"><div className="am-metric-row"><span className="am-metric-total">{data.partner ? `$${(data.earnings / 100).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div><div className="am-metric-sub">{data.partner ? 'Lifetime estimated earnings' : 'Reach 1,000 subs and 250 watch hours to unlock earnings'}</div></div>;
+  if (tab === 'subs') return <MetricRow total={`+${data.subsNow.toLocaleString('en-US')}`} delta={data.sTyp.delta} deltaText={`${Math.abs(data.sTyp.delta)} ${data.sTyp.delta >= 0 ? 'more' : 'less'} than usual`} lo={String(data.sTyp.lo)} hi={String(data.sTyp.hi)} />;
+  return <div className="am-metric-block"><div className="am-metric-row"><span className="am-metric-total">{data.partner ? `$${(data.earnings / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div><div className="am-metric-sub">{data.partner ? 'Lifetime estimated earnings' : 'Reach 1,000 subs and 250 watch hours to unlock earnings'}</div></div>;
 }
 
 function MetricRow({ total, delta, deltaText, lo, hi }: { total: string; delta: number; deltaText: string; lo: string; hi: string }) {
@@ -80,11 +80,11 @@ export function AnalyticsView({ data }: { data: StudioAnalyticsData }) {
                   <path className="area" d={`${activeLine} L${W},${H - 14} L0,${H - 14} Z`} />
                   <path className="line" d={activeLine} />
                 </svg>
-                <div className="am-chart-x axis-fade"><span>{new Date(data.since).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>{new Date(data.since + ((data.days / 2) * DAY)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>Today</span></div>
+                <div className="am-chart-x axis-fade"><span>{new Date(data.since).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span><span>{new Date(data.since + ((data.days / 2) * DAY)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span><span>Today</span></div>
                 {data.markers.length > 0 && (
                   <div className="am-markers" aria-label="Uploads">{data.markers.map((mk, i) => {
                     const left = `${((mk.at - data.since) / ((data.days - 1) * DAY)) * 100}%`;
-                    return <span key={i} className={`am-marker ${mk.n > 1 ? 'multi' : ''} ${mk.shortOnly ? 'short' : ''}`} style={{ left }} title={`${mk.n} upload${mk.n > 1 ? 's' : ''} — ${new Date(mk.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}>{mk.n > 1 ? mk.n : mk.shortOnly ? <Icon name="smart_display" size={14} /> : <Icon name="play_arrow" size={14} />}</span>;
+                    return <span key={i} className={`am-marker ${mk.n > 1 ? 'multi' : ''} ${mk.shortOnly ? 'short' : ''}`} style={{ left }} title={`${mk.n} upload${mk.n > 1 ? 's' : ''} — ${new Date(mk.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}>{mk.n > 1 ? mk.n : mk.shortOnly ? <Icon name="smart_display" size={14} /> : <Icon name="play_arrow" size={14} />}</span>;
                   })}</div>
                 )}
               </>
@@ -101,7 +101,7 @@ export function AnalyticsView({ data }: { data: StudioAnalyticsData }) {
                     <span className="am-rank">{i + 1}</span>
                     <span className="am-content">
                       <span className="am-thumb"><img src={thumbnail} alt="" loading="lazy" decoding="async" /></span>
-                      <span className="am-title-wrap"><span className="am-title">{title}</span><span className="am-date">{new Date(publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></span>
+                      <span className="am-title-wrap"><span className="am-title">{title}</span><span className="am-date">{new Date(publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></span>
                     </span>
                     <span className="am-num">{views ? fmtTime(avgSec / views) : '—'}<span className="am-pct">{views && pct ? `(${pct}%)` : ''}</span></span>
                     <span className="am-num">{fmtInt(views)}</span>
@@ -120,14 +120,14 @@ export function AnalyticsView({ data }: { data: StudioAnalyticsData }) {
             <hr className="am-hr" />
             <div className="am-rt-metric"><b>{fmtInt(data.views48)}</b><span>Views · Last 48 hours</span></div>
             <div className="am-rt-bars" role="img" aria-label="Views per hour, last 48 hours">
-              {data.rtBars.map((n, i) => <div key={i} className="am-rt-bar" style={{ height: `${Math.max(4, (n / Math.max(1, ...data.rtBars)) * 100)}%` }} title={`${n.toLocaleString()} views`} />)}
+              {data.rtBars.map((n, i) => <div key={i} className="am-rt-bar" style={{ height: `${Math.max(4, (n / Math.max(1, ...data.rtBars)) * 100)}%` }} title={`${n.toLocaleString('en-US')} views`} />)}
             </div>
             <div className="am-rt-table-head"><span>Top content</span><span>Views</span></div>
             {data.rtTop.length ? data.rtTop.map(({ id, title, thumbnail, views }) => (
               <Link key={id} href={`/studio/video/${id}`} className="am-rt-row">
                 <span className="am-rt-thumb"><img src={thumbnail} alt="" loading="lazy" decoding="async" /></span>
                 <span className="am-rt-title">{title}</span>
-                <span className="am-rt-views">{views.toLocaleString()}</span>
+                <span className="am-rt-views">{views.toLocaleString('en-US')}</span>
               </Link>
             )) : <p className="muted small" style={{ padding: '12px 0' }}>No views recorded in the last 48 hours yet.</p>}
           </section>
@@ -145,9 +145,9 @@ export function AnalyticsView({ data }: { data: StudioAnalyticsData }) {
               <Link href={`/studio/video/${snap.id}`} className="am-snap-title">{snap.title}</Link>
               <p className="am-snap-window">{daysUnit(snap.ageMs)}</p>
               <div className="am-snap-metrics">
-                <div className="am-snap-row"><span>Views</span><b>{snap.views.toLocaleString()}</b></div>
+                <div className="am-snap-row"><span>Views</span><b>{snap.views.toLocaleString('en-US')}</b></div>
                 <div className="am-snap-row"><span>Average percentage viewed</span><b>{snap.avgPct.toFixed(1)}%</b></div>
-                <div className="am-snap-row"><span>Likes</span><b>{snap.likes.toLocaleString()}</b></div>
+                <div className="am-snap-row"><span>Likes</span><b>{snap.likes.toLocaleString('en-US')}</b></div>
               </div>
               <Link href={`/studio/video/${snap.id}`} className="btn btn-tonal btn-md">See video analytics</Link>
             </section>
