@@ -64,6 +64,17 @@ s.populate(glyphs=list(glyphs), text=LETTERS)
 s.subset(font)
 font.save(OUT)
 
+# stamp the subset URL in globals.css with the file hash, so browsers never serve a stale icon font
+import hashlib
+h = hashlib.md5(open(OUT, 'rb').read()).hexdigest()[:10]
+css_p = f'{ROOT}/../app/globals.css'
+css = open(css_p, encoding='utf8').read()
+import re as _re
+css2 = _re.sub(r"material-symbols-outlined-subset\.woff2\?v=[0-9a-f]+", f"material-symbols-outlined-subset.woff2?v={h}", css)
+if css2 != css:
+    open(css_p, 'w', encoding='utf8').write(css2)
+    print(f'version stamped: {h}')
+
 # verify every used name still resolves in the subset
 out = TTFont(OUT)
 ocmap = out.getBestCmap()
