@@ -208,7 +208,6 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             </div>
           </div>
           {!mobile && description}
-          {mobile && !descOpen && description}
           {mobile && descOpen && (
             <BottomSheet onClose={() => setDescOpen(false)} label="About this video" className="description-sheet">
               {description}
