@@ -118,13 +118,13 @@ export function Chips<T extends string>({ items, value, onChange, className = ''
   const scroll = (dir: number) => ref.current?.scrollBy({ left: dir * 300, behavior: 'smooth' });
   return (
     <div className={`chips-wrap ${className}`}>
-      {edges.left && <div className="chips-arrow left"><IconButton icon="chevron_left" label="Previous" onClick={() => scroll(-1)} /></div>}
+      {edges.left && <div className="chips-arrow left"><IconButton icon="chevron_left" label="Previous" size={28} onClick={() => scroll(-1)} /></div>}
       <div className="chips" ref={ref} onScroll={measure} role="tablist">
         {items.map((it) => (
           <button key={it.id} type="button" role="tab" aria-selected={it.id === value} className={`chip ${it.id === value ? 'on' : ''}`} onClick={() => onChange(it.id)}>{it.label}</button>
         ))}
       </div>
-      {edges.right && <div className="chips-arrow right"><IconButton icon="chevron_right" label="Next" onClick={() => scroll(1)} /></div>}
+      {edges.right && <div className="chips-arrow right"><IconButton icon="chevron_right" label="Next" size={28} onClick={() => scroll(1)} /></div>}
     </div>
   );
 }

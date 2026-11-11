@@ -348,6 +348,8 @@ img { display: block; }
 .chips-arrow { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; z-index: 2; }
 .chips-arrow.left { left: 0; padding-right: 32px; background: linear-gradient(to right, var(--bg) 60%, transparent); }
 .chips-arrow.right { right: 0; padding-left: 32px; background: linear-gradient(to left, var(--bg) 60%, transparent); }
+.chips-arrow .icon-btn { background: transparent; box-shadow: none; }
+.chips-arrow .icon-btn:hover { background: var(--tonal-hover); }
 .feed-chips { position: sticky; top: 56px; z-index: 50; background: var(--bg); padding: 0 24px; max-width: 1800px; margin: 0 auto; }
 
 /* ============ Feed grid & cards ============ */
