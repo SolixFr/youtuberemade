@@ -3,6 +3,11 @@
 **A from-scratch remake of YouTube** — look and feel, feature set, and interaction design
 included — built with **Next.js 16 (App Router)**, **React 19**, **TypeScript** and **SQLite**.
 
+<p align="center">
+  <img src="screenshots/desktop-home.jpg" alt="Vidora — desktop home feed" width="640">
+  <img src="screenshots/mobile-home.jpg" alt="Vidora — phone layout" width="148">
+</p>
+
 The UI follows the conventions of the real thing and uses the same open building blocks:
 [Material Symbols](https://fonts.google.com/icons) icons and the [Roboto](https://fonts.google.com/specimen/Roboto)
 typeface. The name, logo, code and Shorts glyph are original.
@@ -172,4 +177,4 @@ Channel names, subscriber counts and comments are fictional. Full credits are on
 
 ## Screenshots
 
-Desktop and phone screenshots live in [`screenshots/`](screenshots/).
+More screenshots (desktop and phone) live in [`screenshots/`](screenshots/).
