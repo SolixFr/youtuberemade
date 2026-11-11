@@ -8,6 +8,7 @@ import { useApp } from '@/components/app-context';
 import { ChannelAvatar, CompactCard, Thumbnail, VerifiedBadge, useWatchLater } from '@/components/cards';
 import { Player, type PlayerHandle } from '@/components/player';
 import { Comments, RichText, SubscribeButton } from '@/components/social';
+import { CommentsSheet } from './comments-sheet';
 import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
 import { setSubscribed, updateSettings } from '@/lib/actions/channels';
 import { rateVideo, recordView } from '@/lib/actions/videos';
@@ -210,10 +211,14 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
               <span className="c-teaser-row">{topComment ? <><Avatar name={topComment.author.handle} src={topComment.author.avatar} size={24} /><span>{topComment.text}</span></> : <span className="muted">Add a comment…</span>}</span>
             </button>
           )}
-          <section className={`comments ${commentsOpen ? 'expanded' : ''}`}>
-            {mobile && <div className="row-end"><IconButton icon="close" label="Close comments" onClick={() => setCommentsOpen(false)} /></div>}
-            <Comments videoId={v.id} owner={owner} initial={comments} onSeek={seek} />
-          </section>
+          {mobile && commentsOpen && (
+            <CommentsSheet videoId={v.id} owner={owner} comments={comments} onSeek={seek} onClose={() => setCommentsOpen(false)} />
+          )}
+          {!mobile && (
+            <section className="comments">
+              <Comments videoId={v.id} owner={owner} initial={comments} onSeek={seek} />
+            </section>
+          )}
         </div>
       </div>
       <aside className="watch-secondary">
