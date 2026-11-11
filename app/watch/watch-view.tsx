@@ -8,6 +8,7 @@ import { useApp } from '@/components/app-context';
 import { ChannelAvatar, CompactCard, Thumbnail, VerifiedBadge, useWatchLater } from '@/components/cards';
 import { Player, type PlayerHandle } from '@/components/player';
 import { Comments, RichText, SubscribeButton } from '@/components/social';
+import { BottomSheet } from '@/components/bottom-sheet';
 import { CommentsSheet } from './comments-sheet';
 import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
 import { setSubscribed, updateSettings } from '@/lib/actions/channels';
@@ -135,6 +136,8 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   const topComment = comments.filter((c) => !c.parentId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.likes - a.likes)[0];
   const owner = { id: v.channel.id, handle: v.channel.handle, name: v.channel.name, avatar: v.channel.avatar };
 
+  // Seeking from the description sheet also closes the sheet; on desktop it just seeks.
+  const seeker = (t: number) => { seek(t); if (mobile && descOpen) setDescOpen(false); };
   const description = (
     <div className={`description ${descOpen ? 'open' : ''}`} onClick={() => !descOpen && setDescOpen(true)}>
       <div className="desc-stats">
@@ -142,10 +145,10 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
         <span>{descOpen ? formatDate(v.publishedAt) : <Ago ts={v.publishedAt} />}</span>
         {v.visibility !== 'public' && <span className="muted"><Icon name={v.visibility === 'private' ? 'lock' : 'link'} size={16} className="inline-icon" /> {v.visibility}</span>}
       </div>
-      <div className="desc-body"><RichText text={(descOpen ? v.description : v.description.split('\n\n')[0]) || 'No description has been added to this video.'} onSeek={seek} /></div>
+      <div className="desc-body"><RichText text={(descOpen ? v.description : v.description.split('\n\n')[0]) || 'No description has been added to this video.'} onSeek={seeker} /></div>
       {descOpen && chapters.length > 0 && (
         <div className="desc-section"><h3>Chapters</h3>
-          <div className="chapter-list">{chapters.map((ch) => <button type="button" key={ch.t} className="chapter-btn" onClick={() => seek(ch.t)}><b>{ch.title}</b><span className="link">{formatDuration(ch.t)}</span></button>)}</div>
+          <div className="chapter-list">{chapters.map((ch) => <button type="button" key={ch.t} className="chapter-btn" onClick={() => seeker(ch.t)}><b>{ch.title}</b><span className="link">{formatDuration(ch.t)}</span></button>)}</div>
         </div>
       )}
       {descOpen && v.credit && <div className="desc-section"><h3>Source</h3><a className="link" href={v.credit.url} target="_blank" rel="noopener noreferrer">{v.credit.label}</a></div>}
@@ -204,7 +207,13 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
               <Button icon="more_horiz" aria-label="More actions" onClick={(e) => setMoreAnchor(e.currentTarget)} />
             </div>
           </div>
-          {(!mobile || descOpen) && description}
+          {!mobile && description}
+          {mobile && !descOpen && description}
+          {mobile && descOpen && (
+            <BottomSheet onClose={() => setDescOpen(false)} label="About this video" className="description-sheet">
+              {description}
+            </BottomSheet>
+          )}
           {mobile && !commentsOpen && (
             <button type="button" className="c-teaser" onClick={() => setCommentsOpen(true)}>
               <b>Comments</b> <span className="muted">{comments.length}</span>
