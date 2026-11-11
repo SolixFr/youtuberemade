@@ -1,28 +1,23 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { computeGuideMode, type GuideMode } from '@/lib/guide-mode';
 import type { Me } from '@/lib/types';
 import { AppProvider, useApp } from './app-context';
-import { BottomNav, Guide, Masthead, type GuideChannel, type GuideMode } from './chrome';
+import { BottomNav, Guide, Masthead, type GuideChannel } from './chrome';
 import { GlobalDialogs } from './dialogs';
 import { Player } from './player';
 import { StoryComposer, StoryViewer } from './stories';
-import { IconButton, ToastProvider } from './ui';
+import { IconButton, ToastProvider, useWindowWidth } from './ui';
 import { PostComposer, UploadDialog } from './upload';
-
-function subscribeResize(cb: () => void) {
-  window.addEventListener('resize', cb);
-  return () => window.removeEventListener('resize', cb);
-}
+import { TopLoader } from './top-loader';
 
 function useGuideMode(): GuideMode {
   const path = usePathname();
-  const width = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 1440);
-  if (width < 792) return 'none';
-  if (path.startsWith('/watch') || path.startsWith('/studio') || path.startsWith('/messages')) return 'drawer';
-  if (path.startsWith('/shorts')) return width >= 1312 ? 'mini' : 'drawer';
-  return width >= 1312 ? 'full' : 'mini';
+  const width = useWindowWidth();
+  const { collapsed } = useApp();
+  return computeGuideMode(path, width, collapsed);
 }
 
 function MiniPlayer() {
@@ -95,6 +90,7 @@ function Frame({ children, subscriptions, badges }: { children: ReactNode; subsc
   return (
     <div className={`app mode-${mode} route-${route}`}>
       <a href="#main" className="skip-link">Skip to content</a>
+      <Suspense fallback={null}><TopLoader /></Suspense>
       <Masthead badges={badges} />
       <Guide mode={mode} subscriptions={subscriptions} />
       <main className="page" id="main">{children}</main>

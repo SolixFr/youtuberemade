@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { setBell, setSubscribed } from '@/lib/actions/channels';
-import { addComment, deleteComment, deletePost, editComment, likePost, moderateComment, voteComment, votePoll } from '@/lib/actions/social';
+import { addComment, deleteComment, deletePost, editComment, likePost, moderateComment, refreshPost, voteComment, votePoll } from '@/lib/actions/social';
 import {formatCount, watchHref } from '@/lib/format';
 import type { BellLevel, Comment, Post } from '@/lib/types';
 import { Ago } from './ago';
 import { useApp } from './app-context';
 import { Thumbnail } from './cards';
-import { Avatar, Button, ConfirmDialog, Icon, IconButton, Menu, useToast } from './ui';
+import { Avatar, Button, ConfirmDialog, Icon, IconButton, Menu, MemberBadge, CheckCircleIcon, useToast } from './ui';
 
 /* ---------------- Subscribe ---------------- */
 export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
@@ -24,9 +24,9 @@ export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
   const [confirm, setConfirm] = useState(false);
   if (app.me?.id === channel.id) {
     return (
-      <div className="btn-row">
-        <Link href="/studio/customization" className={`btn btn-tonal btn-${size}`}>Customize channel</Link>
-        <Link href="/studio/content" className={`btn btn-tonal btn-${size}`}>Manage videos</Link>
+      <div className="btn-row owner-actions">
+        <Link href="/studio/customization" className={`btn btn-tonal btn-${size}`}><span className="btn-label">Customize channel</span></Link>
+        <Link href="/studio/content" className={`btn btn-tonal btn-${size}`}><span className="btn-label">Manage videos</span></Link>
       </div>
     );
   }
@@ -56,7 +56,7 @@ export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
           { icon: 'person_remove', label: 'Unsubscribe', onSelect: () => setConfirm(true) },
         ]} />
       )}
-      {confirm && <ConfirmDialog title="" text={`Unsubscribe from ${channel.name}?`} confirm="Unsubscribe" onClose={() => setConfirm(false)} onConfirm={() => change(false)} />}
+      {confirm && <ConfirmDialog title={`Unsubscribe from ${channel.name}?`} text="You can subscribe again at any time." confirm="Unsubscribe" onClose={() => setConfirm(false)} onConfirm={() => change(false)} />}
     </>
   );
 }
@@ -151,7 +151,8 @@ function CommentItem({ c, replies, owner, onSeek, update, remove, add }: {
         {c.pinned && <div className="c-pinned"><Icon name="push_pin" size={16} />Pinned by {owner.handle}</div>}
         <div className={`c-who ${c.byCreator ? 'creator' : ''}`}>
           <span>{c.author.handle}</span>
-          {c.byCreator && c.author.verified && <Icon name="check_circle" filled size={14} className="verified" />}
+          {c.author.membership && <MemberBadge tier={c.author.membership.tier} name={c.author.membership.name} />}
+          {c.byCreator && c.author.verified && <CheckCircleIcon size={14} className="verified" />}
           <span className="c-when"><Ago ts={c.createdAt} />{c.edited ? ' (edited)' : ''}</span>
         </div>
         {editing ? (
@@ -199,7 +200,7 @@ function CommentItem({ c, replies, owner, onSeek, update, remove, add }: {
           ...(iOwnVideo && !c.parentId ? [{ icon: 'push_pin', label: c.pinned ? 'Unpin' : 'Pin', onSelect: () => moderate(c.pinned ? 'unpin' : 'pin') }] : []),
           ...(iOwnVideo ? [{ icon: 'favorite', label: c.hearted ? 'Remove heart' : 'Heart', onSelect: () => moderate(c.hearted ? 'unheart' : 'heart') }] : []),
           ...(c.mine ? [{ icon: 'edit', label: 'Edit', onSelect: () => setEditing(true) }] : []),
-          ...(c.mine || iOwnVideo ? [{ icon: 'delete', label: c.mine ? 'Delete' : 'Remove', onSelect: () => setConfirm(true) }] : [{ icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'comment' }) }]),
+          ...(c.mine || iOwnVideo ? [{ icon: 'delete', label: c.mine ? 'Delete' : 'Remove', onSelect: () => setConfirm(true) }] : [{ icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'comment', targetId: c.id }) }]),
         ]} />
       )}
       {confirm && <ConfirmDialog title="Delete comment" text="Delete this comment permanently?" onClose={() => setConfirm(false)} onConfirm={async () => {
@@ -257,7 +258,34 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
   const [p, setP] = useState(initial);
   const [confirm, setConfirm] = useState(false);
   const [gone, setGone] = useState(false);
+  // Poll the server for fresh like/poll/comment counts while the tab is visible.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void refreshPost(p.id).then((r) => {
+        if (!r.ok) return;
+        setP((x) => ({ ...x, likes: r.data.likes, comments: r.data.comments, poll: r.data.poll, myVote: r.data.myVote }));
+      });
+    }, 4000);
+    return () => clearInterval(t);
+  }, [p.id]);
   if (gone) return null;
+  if (p.locked) {
+    return (
+      <article className="post post-locked">
+        <Link href={`/${p.channel.handle}`}><Avatar channel={p.channel} size={40} /></Link>
+        <div className="post-body">
+          <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><span className="muted"><Ago ts={p.createdAt} /></span><span className="members-pill"><Icon name="loyalty" size={14} />Members only</span></div>
+          <div className="member-lock">
+            <Icon name="loyalty" size={36} />
+            <p className="member-lock-title">Members-only post</p>
+            <p className="muted">Join {p.channel.name} to view this post and help the channel grow.</p>
+            <Link href={`/${p.channel.handle}`} className="btn btn-filled btn-sm">Join this channel</Link>
+          </div>
+        </div>
+      </article>
+    );
+  }
   const total = p.poll?.reduce((n, o) => n + o.votes, 0) ?? 0;
   const like = () => app.requireAuth('Sign in to like posts', async () => {
     const on = !p.liked;
@@ -273,7 +301,7 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
     <article className="post">
       <Link href={`/${p.channel.handle}`}><Avatar channel={p.channel} size={40} /></Link>
       <div className="post-body">
-        <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><Link href={`/post/${p.id}`} className="muted"><Ago ts={p.createdAt} /></Link></div>
+        <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><Link href={`/post/${p.id}`} className="muted"><Ago ts={p.createdAt} /></Link>{p.membersOnly && <span className="members-pill"><Icon name="loyalty" size={14} />Members only</span>}</div>
         {p.text && <p className="post-text"><RichText text={p.text} /></p>}
         {p.image && <div className="post-image"><img src={p.image} alt="" loading="lazy" decoding="async" /></div>}
         {p.video && (
@@ -291,7 +319,7 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
               return (
                 <button type="button" key={i} className={`poll-option ${p.myVote === i ? 'chosen' : ''}`} onClick={() => vote(i)}>
                   <span className="poll-fill" style={{ width: voted ? `${pct}%` : 0 }} />
-                  <span>{p.myVote === i && <Icon name="check_circle" filled size={16} className="poll-check" />}{o.text}</span>
+                  <span className="poll-label">{p.myVote === i && <CheckCircleIcon size={16} className="poll-check" />}{o.text}</span>
                   {voted && <span>{pct}%</span>}
                 </button>
               );

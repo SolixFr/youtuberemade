@@ -2,8 +2,9 @@
 
 import { cookies } from 'next/headers';
 import { Invalid, newId, run, text } from '@/lib/server/action';
-import { clientIp, createSession, destroySession, getMe, hashPassword, rateLimit, verifyPassword } from '@/lib/server/auth';
+import { clientIp, createSession, destroySession, getMe, hashPassword, pushAccountId, rateLimit, verifyPassword } from '@/lib/server/auth';
 import { sql } from '@/lib/server/db';
+import { TIERS } from '@/lib/server/seed';
 import type { Theme } from '@/lib/types';
 
 const HANDLE = /^[a-z0-9._-]{3,30}$/i;
@@ -23,7 +24,10 @@ export async function signUp(input: { name: string; handle: string; email: strin
     const id = newId('u');
     sql('INSERT INTO users (id, handle, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(id, `@${handle}`, name, email, await hashPassword(input.password), Date.now());
+    const insertTier = sql('INSERT OR IGNORE INTO channel_tiers (channel_id, tier, price_cents, name, perks) VALUES (?, ?, ?, ?, ?)');
+    for (const t of TIERS) insertTier.run(id, t.tier, t.price_cents, t.name, JSON.stringify(t.perks));
     await createSession(id);
+    await pushAccountId(id);
     return { handle: `@${handle}` };
   });
 }
@@ -39,6 +43,7 @@ export async function signIn(input: { email: string; password: string }) {
     const ok = await verifyPassword(String(input.password ?? ''), row?.password_hash ?? null);
     if (!row || !ok) throw new Invalid('Wrong email or password');
     await createSession(row.id);
+    await pushAccountId(row.id);
     return null;
   });
 }

@@ -17,16 +17,16 @@ interface CatalogItem {
 const TOPICS: Record<string, string> = { loworbit: 'Earth', solarcycle: 'The Sun', pad39: 'Rockets', farlight: 'Telescopes & Mars' };
 
 const CHANNELS = [
-  { id: 'loworbit', name: 'Low Orbit', subs: 1_240_000, verified: 1, joined: 2900,
+  { id: 'loworbit', name: 'Low Orbit', subs: 1_240_000, verified: 1, joined: 2900, pronouns: 'they/them',
     desc: 'Earth as seen from about 400 km up. Every clip here is public-domain footage from NASA, cut down to the good part and credited in the description.',
     links: [{ title: 'NASA Image and Video Library', url: 'https://images.nasa.gov' }] },
-  { id: 'solarcycle', name: 'Solar Cycle', subs: 386_000, verified: 1, joined: 2100,
+  { id: 'solarcycle', name: 'Solar Cycle', subs: 386_000, verified: 1, joined: 2100, pronouns: 'she/her',
     desc: 'Flares, sunspots and eruptions from the Solar Dynamics Observatory. New time-lapses when the Sun does something worth watching.',
     links: [{ title: 'SDO mission page', url: 'https://sdo.gsfc.nasa.gov' }] },
-  { id: 'pad39', name: 'Pad 39', subs: 2_050_000, verified: 1, joined: 3300,
+  { id: 'pad39', name: 'Pad 39', subs: 2_050_000, verified: 1, joined: 3300, pronouns: 'he/him',
     desc: 'Rollouts, static fires and launches. Named after Launch Complex 39 at Kennedy Space Center.',
     links: [{ title: 'Artemis program', url: 'https://www.nasa.gov/humans-in-space/artemis/' }] },
-  { id: 'farlight', name: 'Far Light', subs: 9_412, verified: 0, joined: 540,
+  { id: 'farlight', name: 'Far Light', subs: 9_412, verified: 0, joined: 540, pronouns: '',
     desc: 'Telescopes, rovers and the engineering behind them. Small channel, slow uploads.', links: [] },
 ];
 
@@ -60,14 +60,24 @@ const COMMENTS: [string, string, string, number, number, ('creator' | 'pinned' |
   ['s-eye', '@tropics_watch', 'The eye wall is so clean here.', 600, 60],
 ];
 
+export const TIERS = [
+  { tier: 1, price_cents: 499, name: 'Supporter', perks: ['Member badge', 'Custom emoji', 'Members-only posts'] },
+  { tier: 2, price_cents: 999, name: 'Fan', perks: ['Member badge x2', 'Custom emoji', 'Members-only posts', 'Early access'] },
+  { tier: 3, price_cents: 1999, name: 'Insider', perks: ['Member badge x3', 'Custom emoji', 'Members-only posts', 'Early access', 'Monthly Q&A'] },
+  { tier: 4, price_cents: 4999, name: 'Champion', perks: ['Member badge x4', 'Custom emoji', 'Members-only posts', 'Early access', 'Priority replies'] },
+  { tier: 5, price_cents: 9999, name: 'Producer', perks: ['Member badge x5', 'Custom emoji', 'Members-only posts', 'Early access', 'Priority replies', 'Producer badge'] },
+];
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 
 export function seed(db: Database.Database) {
   const now = Date.now();
-  const addUser = db.prepare(`INSERT INTO users (id, handle, name, description, avatar, banner, verified, subscribers, links, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const addUser = db.prepare(`INSERT INTO users (id, handle, name, description, avatar, banner, verified, pronouns, subscribers, links, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const c of CHANNELS) {
-    addUser.run(c.id, `@${c.id}`, c.name, c.desc, `/media/img/av-${c.id}.jpg`, `/media/img/bn-${c.id}.jpg`, c.verified, c.subs, JSON.stringify(c.links), now - c.joined * DAY);
+    addUser.run(c.id, `@${c.id}`, c.name, c.desc, `/media/img/av-${c.id}.jpg`, `/media/img/bn-${c.id}.jpg`, c.verified, c.pronouns, c.subs, JSON.stringify(c.links), now - c.joined * DAY);
+    for (const t of TIERS) {
+      db.prepare('INSERT OR IGNORE INTO channel_tiers (channel_id, tier, price_cents, name, perks) VALUES (?, ?, ?, ?, ?)').run(c.id, t.tier, t.price_cents, t.name, JSON.stringify(t.perks));
+    }
   }
 
   const addVideo = db.prepare(`INSERT INTO videos (id, channel_id, type, title, description, duration, views, likes, published_at, src, thumbnail, visibility, topic, credit_label, credit_url)
@@ -98,9 +108,9 @@ export function seed(db: Database.Database) {
   addOption.run('p2', 1, 'Crew access arm close-ups', 2_480);
   addOption.run('p2', 2, 'Night launch compilation', 9_030);
 
-  const addStory = db.prepare("INSERT INTO stories (id, channel_id, image, background, text, text_color, video_id, created_at) VALUES (?, ?, ?, '#000', ?, '#ffffff', ?, ?)");
-  addStory.run('st1', 'pad39', '/media/img/st-pad39-1.jpg', 'Sunset at 39B', 'rollout', now - 5 * HOUR);
-  addStory.run('st2', 'pad39', '/media/img/st-pad39-2.jpg', 'Booster test angle #2 coming this week', null, now - 2 * HOUR);
-  addStory.run('st3', 'loworbit', '/media/img/st-loworbit-1.jpg', 'Helene, Sept 26', 'helene', now - 26 * HOUR);
-  addStory.run('st4', 'solarcycle', '/media/img/st-solarcycle-1.jpg', 'Quiet week on the Sun. Re-watching 2017.', 'sunspot', now - 3 * DAY);
+  const addStory = db.prepare("INSERT INTO stories (id, channel_id, image, background, text, text_color, views, likes, video_id, created_at) VALUES (?, ?, ?, '#000', ?, '#ffffff', ?, ?, ?, ?)");
+  addStory.run('st1', 'pad39', '/media/img/st-pad39-1.jpg', 'Sunset at 39B', 41_200, 1_860, 'rollout', now - 5 * HOUR);
+  addStory.run('st2', 'pad39', '/media/img/st-pad39-2.jpg', 'Booster test angle #2 coming this week', 22_400, 940, null, now - 2 * HOUR);
+  addStory.run('st3', 'loworbit', '/media/img/st-loworbit-1.jpg', 'Helene, Sept 26', 118_000, 5_400, 'helene', now - 26 * HOUR);
+  addStory.run('st4', 'solarcycle', '/media/img/st-solarcycle-1.jpg', 'Quiet week on the Sun. Re-watching 2017.', 9_700, 410, 'sunspot', now - 3 * DAY);
 }

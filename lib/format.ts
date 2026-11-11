@@ -1,8 +1,18 @@
-const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+// Truncated, not rounded (like YouTube), so 1,050 never shows as "1.1K".
+const trim0 = (s: string) => s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 
-/** 1234 -> "1.2K", 2_050_000 -> "2.1M" (the format used on view and subscriber counts). */
+/** 1234 -> "1.23K", 20_500_000 -> "20.5M" (the format used on view and subscriber counts). */
 export function formatCount(n: number): string {
-  return n < 1000 ? String(n) : compact.format(n);
+  if (n < 1000) return String(n);
+  const units: [number, string][] = [[1_000_000_000, 'B'], [1_000_000, 'M'], [1_000, 'K']];
+  for (const [size, suffix] of units) {
+    const v = n / size;
+    if (v < 1) continue;
+    if (v >= 100) return `${Math.floor(v)}${suffix}`;
+    if (v >= 10) return `${trim0((Math.floor(v * 10 + 1e-6) / 10).toFixed(1))}${suffix}`;
+    return `${trim0((Math.floor(v * 100 + 1e-6) / 100).toFixed(2))}${suffix}`;
+  }
+  return String(n);
 }
 
 export function formatDuration(seconds: number): string {

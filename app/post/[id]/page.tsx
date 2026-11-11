@@ -14,7 +14,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="page-pad narrow">
       <PostCard post={post} />
-      <PostComments postId={id} initial={postComments(id, me?.id)} />
+      {!post.locked && <PostComments postId={id} initial={postComments(id, me?.id)} />}
     </div>
   );
 }

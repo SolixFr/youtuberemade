@@ -15,12 +15,15 @@ export interface ChannelLite {
   verified: boolean;
   subscribers: number;
   story: StoryState;
+  /** Member badge for the viewer on this channel. */
+  membership?: { tier: number; name: string } | null;
 }
 
 export interface Channel extends ChannelLite {
   description: string;
   banner: string | null;
   links: { title: string; url: string }[];
+  pronouns: string;
   joinedAt: number;
   hasAccount: boolean;
 }
@@ -44,6 +47,8 @@ export interface Video {
   channel: ChannelLite;
   /** Resume position for the signed-in viewer, in seconds. */
   progress: number;
+  /** True while the channel is broadcasting this video right now. */
+  live?: boolean;
 }
 
 export interface ViewerVideoState {
@@ -57,7 +62,7 @@ export interface Comment {
   id: string;
   videoId: string;
   parentId: string | null;
-  author: { id: string | null; name: string; handle: string; avatar: string | null; verified: boolean };
+  author: { id: string | null; name: string; handle: string; avatar: string | null; verified: boolean; membership?: { tier: number; name: string } | null };
   byCreator: boolean;
   mine: boolean;
   text: string;
@@ -78,6 +83,9 @@ export interface Post {
   poll: { text: string; votes: number }[] | null;
   myVote: number | null;
   likes: number;
+  /** True when the post is members-only. Non-members receive it redacted with `locked` set. */
+  membersOnly?: boolean;
+  locked?: boolean;
   liked: boolean;
   comments: number;
   createdAt: number;
@@ -85,7 +93,7 @@ export interface Post {
 
 export interface PostComment {
   id: string;
-  author: { name: string; handle: string; avatar: string | null };
+  author: { name: string; handle: string; avatar: string | null; membership?: { tier: number; name: string } | null };
   mine: boolean;
   text: string;
   createdAt: number;
@@ -97,6 +105,10 @@ export interface StorySlide {
   background: string;
   text: string;
   textColor: string;
+  /** Where the text sits: 'top|middle|bottom' - 'left|center|right'. */
+  textPos: string;
+  views: number;
+  likes: number;
   video: { id: string; title: string; type: VideoType } | null;
   createdAt: number;
   seen: boolean;
@@ -125,6 +137,8 @@ export interface Notification {
   thumbnail: string | null;
   at: number;
   read: boolean;
+  /** What generated it; 'sub'/'comment' notifications are about the viewer's own channel. */
+  kind?: 'upload' | 'post' | 'story' | 'sub' | 'comment';
 }
 
 export interface Settings {
@@ -140,6 +154,8 @@ export interface Me {
   name: string;
   avatar: string | null;
   subscribers: number;
+  pronouns: string;
+  role: 'user' | 'admin';
   settings: Settings;
 }
 

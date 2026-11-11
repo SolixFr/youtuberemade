@@ -94,8 +94,9 @@ export async function deleteVideo(videoId: string) {
 export async function myPickers() {
   return run(async () => {
     const me = await requireMe();
-    const playlists = sql('SELECT id, title FROM playlists WHERE owner_id = ? ORDER BY updated_at DESC').all(me.id) as { id: string; title: string }[];
-    const videos = sql("SELECT id, title FROM videos WHERE channel_id = ? AND visibility = 'public' ORDER BY published_at DESC LIMIT 100").all(me.id) as { id: string; title: string }[];
+    const playlists = (sql('SELECT p.id, p.title, COUNT(i.video_id) n FROM playlists p LEFT JOIN playlist_items i ON i.playlist_id = p.id WHERE p.owner_id = ? GROUP BY p.id ORDER BY p.updated_at DESC').all(me.id) as { id: string; title: string; n: number }[])
+      .map((p) => ({ id: p.id, title: p.title, count: p.n }));
+    const videos = sql("SELECT id, title, thumbnail FROM videos WHERE channel_id = ? AND visibility = 'public' ORDER BY published_at DESC LIMIT 100").all(me.id) as { id: string; title: string; thumbnail: string }[];
     return { playlists, videos };
   });
 }

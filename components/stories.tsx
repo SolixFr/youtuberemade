@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createStory, deleteStory, likeStory, loadStories, markStorySeen } from '@/lib/actions/social';
-import type { StoryGroup } from '@/lib/types';
+import type { StoryGroup, StorySlide } from '@/lib/types';
 import { uploadFile } from '@/lib/upload-client';
+import { formatCount } from '@/lib/format';
 import { Ago } from './ago';
 import { useApp } from './app-context';
-import { Avatar, Button, ConfirmDialog, Dialog, Field, Icon, IconButton, Spinner, useIsMobile, useToast } from './ui';
+import { VerifiedBadge } from './cards';
+import { Avatar, Button, ConfirmDialog, Dialog, EmptyState, Field, Icon, IconButton, Spinner, useIsMobile, useToast } from './ui';
 
 const SLIDE_MS = 6000;
 const MIN_SUBS = 10_000;
@@ -150,6 +152,7 @@ export function StoryViewer({ startChannel, onClose }: { startChannel: string; o
             <div className="story-head">
               <Link href={`/${group.channel.handle}`} onClick={close} className="story-who"><Avatar channel={group.channel} size={32} />{group.channel.name}</Link>
               <span className="story-when"><Ago ts={slide.createdAt} /></span>
+              {isMine && <span className="story-when">{formatCount(slide.views)} views · {formatCount(slide.likes)} likes</span>}
               <span className="grow" />
               <IconButton icon={paused ? 'play_arrow' : 'pause'} filled label={paused ? 'Play' : 'Pause'} onClick={() => setPaused(!paused)} />
               {mobile && <IconButton icon="close" label="Close" onClick={close} />}
@@ -157,11 +160,11 @@ export function StoryViewer({ startChannel, onClose }: { startChannel: string; o
             <div className="story-tap left" onClick={() => go(-1)} />
             <div className="story-tap right" onClick={() => (paused ? setPaused(false) : go(1))}
               onPointerDown={(e) => { const t = setTimeout(() => setPaused(true), 250); e.currentTarget.addEventListener('pointerup', () => clearTimeout(t), { once: true }); }} />
-            {slide.text && <p className="story-text" style={{ color: slide.textColor }}>{slide.text}</p>}
+            {slide.text && <p className={`story-text ${posClasses(slide.textPos)}`} style={{ color: slide.textColor }}>{slide.text}</p>}
             <div className="story-foot">
               {slide.video && (
                 <Link className="story-link" href={slide.video.type === 'short' ? `/shorts/${slide.video.id}` : `/watch?v=${slide.video.id}`} onClick={close}>
-                  <Icon name="play_arrow" filled size={20} />{slide.video.title}
+                  <Icon name="play_arrow" filled size={20} /><MarqueeText text={slide.video.title} />
                 </Link>
               )}
               <span className="grow" />
@@ -202,6 +205,22 @@ export function StoryViewer({ startChannel, onClose }: { startChannel: string; o
 }
 
 /* ---------- Composer ---------- */
+const TEXT_COLORS = ['#ffffff', '#0f0f0f', '#ffd54f', '#80deea'];
+const POSITIONS = ['top-left', 'top-center', 'top-right', 'middle-left', 'middle-center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'];
+const POS_LABELS: Record<string, string> = {
+  'top-left': 'Top left', 'top-center': 'Top center', 'top-right': 'Top right',
+  'middle-left': 'Middle left', 'middle-center': 'Middle center', 'middle-right': 'Middle right',
+  'bottom-left': 'Bottom left', 'bottom-center': 'Bottom center', 'bottom-right': 'Bottom right',
+};
+export const posClasses = (pos?: string) => {
+  const [v = 'middle', h = 'center'] = (pos || 'middle-center').split('-');
+  return `pos-${v} pos-${h}`;
+};
+const contrast = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255) > 128 ? '#0f0f0f' : '#ffffff';
+};
+
 export function StoryComposer({ onClose }: { onClose: () => void }) {
   const app = useApp();
   const toast = useToast();
@@ -210,6 +229,7 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [bg, setBg] = useState(BACKGROUNDS[1]);
   const [color, setColor] = useState('#ffffff');
+  const [pos, setPos] = useState('middle-center');
   const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
   const [camera, setCamera] = useState<MediaStream | null>(null);
   const [busy, setBusy] = useState(false);
@@ -247,7 +267,7 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       const image = photo ? await uploadFile(photo.blob, 'image').promise : null;
-      const r = await createStory({ image, text, background: bg, textColor: color });
+      const r = await createStory({ image, text, background: bg, textColor: color, textPos: pos });
       if (!r.ok) return toast(r.error);
       close();
       router.refresh();
@@ -265,7 +285,7 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
       <div className="story-editor">
         <div className="story-preview" style={{ background: bg }}>
           {camera ? <video ref={camVideo} muted playsInline className="story-img mirror" /> : photo && <img src={photo.url} alt="" className="story-img" />}
-          {text && <p className="story-text" style={{ color }}>{text}</p>}
+          {text && <p className={`story-text ${posClasses(pos)}`} style={{ color }}>{text}</p>}
           {camera && <Button variant="filled" className="snap on-media-light" icon="photo_camera" onClick={snap}>Take photo</Button>}
         </div>
         <div className="story-controls">
@@ -278,12 +298,125 @@ export function StoryComposer({ onClose }: { onClose: () => void }) {
           </div>
           <Field label="Text" count={`${text.length}/120`}><textarea rows={2} maxLength={120} value={text} onChange={(e) => setText(e.target.value)} placeholder="Say something" /></Field>
           <p className="label">Background</p>
-          <div className="swatches">{BACKGROUNDS.map((b) => <button type="button" key={b} aria-label={`Background ${b}`} className={bg === b ? 'on' : ''} style={{ background: b }} onClick={() => { setBg(b); setColor(b === '#f5f5f5' ? '#0f0f0f' : '#ffffff'); }} />)}</div>
+          <div className="swatches">
+            {BACKGROUNDS.map((b) => <button type="button" key={b} aria-label={`Background ${b}`} className={bg === b ? 'on' : ''} style={{ background: b }} onClick={() => { setBg(b); setColor(contrast(b)); }} />)}
+            <label className={`swatch ${BACKGROUNDS.includes(bg) ? '' : 'on'}`} style={BACKGROUNDS.includes(bg) ? undefined : { background: bg }} title="Custom color">
+              {BACKGROUNDS.includes(bg) && <Icon name="add" size={14} />}
+              <input type="color" value={bg} onChange={(e) => { setBg(e.target.value); setColor(contrast(e.target.value)); }} aria-label="Pick a custom background color" />
+            </label>
+          </div>
           <p className="label">Text color</p>
-          <div className="swatches">{['#ffffff', '#0f0f0f', '#ffd54f', '#80deea'].map((c) => <button type="button" key={c} aria-label={`Text ${c}`} className={color === c ? 'on' : ''} style={{ background: c }} onClick={() => setColor(c)} />)}</div>
+          <div className="swatches">
+            {TEXT_COLORS.map((c) => <button type="button" key={c} aria-label={`Text color ${c}`} className={color === c ? 'on' : ''} style={{ background: c }} onClick={() => setColor(c)} />)}
+            <label className={`swatch ${TEXT_COLORS.includes(color) ? '' : 'on'}`} style={TEXT_COLORS.includes(color) ? undefined : { background: color }} title="Custom color">
+              {TEXT_COLORS.includes(color) && <Icon name="add" size={14} />}
+              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Pick a custom text color" />
+            </label>
+          </div>
+          <p className="label">Text position</p>
+          <div className="pos-grid" role="group" aria-label="Text position">
+            {POSITIONS.map((p) => <button type="button" key={p} className={pos === p ? 'on' : ''} aria-label={POS_LABELS[p]} aria-pressed={pos === p} title={POS_LABELS[p]} onClick={() => setPos(p)} />)}
+          </div>
           <p className="muted small">Stories are visible for 7 days on your channel and in your subscribers’ feeds.</p>
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/* ---------- Marquee: slides one-line text left to its end, then back ---------- */
+function MarqueeText({ text }: { text: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+  useEffect(() => {
+    const measure = () => {
+      const b = box.current, i = inner.current;
+      if (b && i) setShift(Math.min(0, b.clientWidth - i.offsetWidth));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [text]);
+  return (
+    <span ref={box} className="marquee">
+      <span ref={inner} className="marquee-inner" style={{ '--shift': `${shift}px`, animation: shift < 0 ? undefined : 'none' } as CSSProperties}>{text}</span>
+    </span>
+  );
+}
+
+/* ---------- Stories page ---------- */
+function SlideFrame({ s }: { s: StorySlide }) {
+  return (
+    <div className={`story-tile-frame ${s.image ? 'has-image' : ''}`} style={{ background: s.background, color: s.textColor }}>
+      {s.image && <img src={s.image} alt="" loading="lazy" />}
+      <p className={posClasses(s.textPos)}>{s.text}</p>
+    </div>
+  );
+}
+
+function SlideTile({ channelId, s, showViews }: { channelId: string; s: StorySlide; showViews?: boolean }) {
+  const app = useApp();
+  return (
+    <button type="button" className={`story-tile ${s.seen ? 'seen' : ''}`} onClick={() => app.openStory(channelId)} aria-label={s.text ? `Story: ${s.text}` : 'Story'}>
+      <SlideFrame s={s} />
+      <span className="story-tile-cap"><Ago ts={s.createdAt} />{showViews && <> · {formatCount(s.views)} views</>}{s.seen && <span className="seen-tag"><Icon name="check" size={14} />Seen</span>}</span>
+    </button>
+  );
+}
+
+function AddStoryTile() {
+  const app = useApp();
+  return (
+    <button type="button" className="story-tile" onClick={() => app.open({ kind: 'story' })}>
+      <div className="story-tile-frame add"><Icon name="add" size={40} /></div>
+      <div className="small">Add to story</div>
+    </button>
+  );
+}
+
+/** The /stories page: your story first, then one section per channel with an active story. */
+export function StoriesView({ groups, meId, canPost }: { groups: StoryGroup[]; meId: string | null; canPost: boolean }) {
+  const app = useApp();
+  const mine = meId ? groups.find((g) => g.channel.id === meId) : undefined;
+  const others = groups.filter((g) => g.channel.id !== meId);
+  return (
+    <>
+      {(mine || canPost) && (
+        <section aria-labelledby="your-story">
+          <h2 className="stories-sec" id="your-story">Your story</h2>
+          <div className="story-tiles">
+            {mine?.slides.map((s) => <SlideTile key={s.id} channelId={mine.channel.id} s={s} showViews />)}
+            {canPost && <AddStoryTile />}
+          </div>
+        </section>
+      )}
+      {others.length > 0 && (
+        <section aria-labelledby="all-stories">
+          <h2 className="stories-sec" id="all-stories">{meId ? 'From your subscriptions' : 'All stories'}</h2>
+          {others.map((g) => {
+            const last = g.slides[g.slides.length - 1];
+            return (
+              <section key={g.channel.id} className="story-group" aria-label={`${g.channel.name}’s stories`}>
+                <button type="button" className="story-group-head" onClick={() => app.openStory(g.channel.id)} aria-label={`Open ${g.channel.name}’s stories`}>
+                  <Avatar channel={g.channel} size={40} ring={g.channel.story ?? 'seen'} />
+                  <span className="story-group-text">
+                    <span className="story-group-name">{g.channel.name}{g.channel.verified && <VerifiedBadge />}</span>
+                    <span className="muted small">{g.slides.length} {g.slides.length === 1 ? 'story' : 'stories'} · latest <Ago ts={last.createdAt} /></span>
+                  </span>
+                  <Icon name="chevron_right" className="story-group-chev" />
+                </button>
+                <div className="story-tiles">{g.slides.map((s) => <SlideTile key={s.id} channelId={g.channel.id} s={s} />)}</div>
+              </section>
+            );
+          })}
+        </section>
+      )}
+      {!mine && others.length === 0 && (
+        <EmptyState icon="auto_stories" title="No active stories"
+          text={meId ? 'Stories from the channels you subscribe to show up here. They disappear 7 days after they’re posted.' : 'Stories from channels show up here. Sign in to follow your favorite channels.'}
+          action={!meId ? <Link href="/signin?next=/stories" className="btn btn-tonal btn-md">Sign in</Link> : undefined} />
+      )}
+    </>
   );
 }

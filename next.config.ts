@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -21,6 +22,9 @@ const csp = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // My verification builds use a separate output dir so they never clobber the dev server's .next/
+  ...(process.env.VIDORA_VERIFY_BUILD ? { distDir: '.next-verify' } : {}),
+  turbopack: { root: fileURLToPath(new URL('.', import.meta.url)) },
   serverExternalPackages: ['better-sqlite3'],
   images: { unoptimized: true },
   async headers() {
@@ -37,6 +41,7 @@ const nextConfig: NextConfig = {
         ],
       },
       { source: '/media/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' }] },
+      { source: '/fonts/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
     ];
   },
 };

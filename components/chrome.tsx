@@ -3,13 +3,17 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { badgeCounts, dismissNotification, loadNotifications, markNotificationsRead, removeSearch, saveSearch, searchSuggestions } from '@/lib/actions/account';
+import { badgeCounts, dismissNotification, loadNotifications, markNotificationsRead, removeSearch, saveSearch, searchSuggestions, switchAccount, switchList } from '@/lib/actions/account';
 import { setTheme, signOut } from '@/lib/actions/auth';
 import { setBell } from '@/lib/actions/channels';
 import type { ChannelLite, Notification, Theme } from '@/lib/types';
+import { computeGuideMode, type GuideMode } from '@/lib/guide-mode';
 import { Ago } from './ago';
+import { formatCount } from '@/lib/format';
 import { useApp } from './app-context';
-import { Avatar, Dialog, Icon, IconButton, Menu, ShortsIcon, Spinner, useIsMobile, type MenuItem } from './ui';
+import { Avatar, Dialog, Icon, IconButton, Menu, ShortsIcon, Spinner, useIsMobile, useToast, useWindowWidth, type MenuItem } from './ui';
+
+export type { GuideMode };
 
 export interface GuideChannel extends ChannelLite { hasNew: boolean }
 
@@ -155,15 +159,23 @@ function NotificationsMenu({ anchor, onClose, onRead }: { anchor: HTMLElement; o
   const router = useRouter();
   const [items, setItems] = useState<Notification[] | null>(null);
   const [menuFor, setMenuFor] = useState<{ el: HTMLElement; n: Notification } | null>(null);
+  const marked = useRef(false);
   useEffect(() => {
     let alive = true;
-    loadNotifications().then((r) => {
+    const load = () => loadNotifications().then((r) => {
       if (!alive || !r.ok) return;
       setItems(r.data);
-      const unread = r.data.filter((n) => !n.read).map((n) => n.key);
-      if (unread.length) markNotificationsRead(unread).then(onRead);
+      // Everything is marked read when the menu opens; polling keeps the list
+      // fresh (new arrivals show unread) without clearing the badge again.
+      if (!marked.current) {
+        marked.current = true;
+        const unread = r.data.filter((n) => !n.read).map((n) => n.key);
+        if (unread.length) markNotificationsRead(unread).then(onRead);
+      }
     });
-    return () => { alive = false; };
+    load();
+    const t = setInterval(load, 15_000);
+    return () => { alive = false; clearInterval(t); };
   }, [onRead]);
   return (
     <Menu anchor={anchor} onClose={onClose} className="notif-menu" header={
@@ -184,7 +196,10 @@ function NotificationsMenu({ anchor, onClose, onRead }: { anchor: HTMLElement; o
           ))}
           {menuFor && <Menu anchor={menuFor.el} onClose={() => setMenuFor(null)} sheet={false} items={[
             { icon: 'visibility_off', label: 'Hide this notification', onSelect: () => { setItems((x) => x?.filter((y) => y.key !== menuFor.n.key) ?? null); void dismissNotification(menuFor.n.key); } },
-            { icon: 'notifications_off', label: `Turn off all from ${menuFor.n.channel.name}`, onSelect: () => { setItems((x) => x?.filter((y) => y.channel.id !== menuFor.n.channel.id) ?? null); void setBell(menuFor.n.channel.id, 'none'); } },
+            // Bells only exist for subscription-driven notifications.
+            ...(!menuFor.n.kind || ['upload', 'post', 'story'].includes(menuFor.n.kind)
+              ? [{ icon: 'notifications_off', label: `Turn off all from ${menuFor.n.channel.name}`, onSelect: () => { setItems((x) => x?.filter((y) => y.channel.id !== menuFor.n.channel.id) ?? null); void setBell(menuFor.n.channel.id, 'none'); } }]
+              : []),
           ]} />}
         </>
       )}
@@ -206,19 +221,56 @@ export function applyTheme(theme: Theme) {
 function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }) {
   const app = useApp();
   const router = useRouter();
-  const [view, setView] = useState<'main' | 'theme'>('main');
+  const toast = useToast();
+  const [view, setView] = useState<'main' | 'theme' | 'switch'>('main');
   const [theme, setThemeState] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme) ?? 'dark');
+  const [accounts, setAccounts] = useState<{ id: string; handle: string; name: string; avatar: string | null; subscribers: number }[] | null>(null);
+  const subsLabel = (n: number) => `${formatCount(n)} ${n === 1 ? 'subscriber' : 'subscribers'}`;
   const me = app.me!;
+  useEffect(() => {
+    if (view !== 'switch' || accounts !== null) return;
+    let alive = true;
+    void switchList().then((r) => { if (alive && r.ok) setAccounts(r.data); });
+    return () => { alive = false; };
+  }, [view, accounts]);
   if (view === 'theme') {
     return (
       <Menu anchor={anchor} onClose={onClose} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Appearance</span></div>}
         items={THEMES.map((t) => ({ icon: '', label: t.label, checked: t.id === theme, keepOpen: true, onSelect: () => { setThemeState(t.id); applyTheme(t.id); } }))} />
     );
   }
+  if (view === 'switch') {
+    return (
+      <Menu anchor={anchor} onClose={onClose} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Switch account</span></div>}>
+        <button type="button" className="account-switch-row current" disabled aria-current="true">
+          <Avatar channel={me} size={44} />
+          <span className="account-switch-text"><b>{me.name}</b><small>{me.handle} · {subsLabel(me.subscribers)}</small></span>
+          <Icon name="check" className="account-switch-check" size={22} />
+        </button>
+        {accounts?.map((a) => (
+          <button key={a.id} type="button" className="account-switch-row" onClick={async () => {
+            const r = await switchAccount(a.id);
+            if (!r.ok) { toast(r.error); return; }
+            onClose();
+            router.push('/');
+            router.refresh();
+          }}>
+            <Avatar name={a.name} src={a.avatar} size={44} />
+            <span className="account-switch-text"><b>{a.name}</b><small>{a.handle} · {subsLabel(a.subscribers)}</small></span>
+          </button>
+        ))}
+        <Link href="/signin?mode=signup" onClick={onClose} className="account-switch-row">
+          <span className="account-switch-add"><Icon name="add" size={26} /></span>
+          <span className="account-switch-text"><b>Add account</b><small>Create or sign in to another account</small></span>
+        </Link>
+      </Menu>
+    );
+  }
   const items: MenuItem[] = [
     { icon: 'account_box', label: 'Your channel', href: `/${me.handle}` },
     { icon: 'video_settings', label: 'Vidora Studio', href: '/studio' },
     { icon: 'chat', label: 'Messages', href: '/messages' },
+    { icon: 'switch_account', label: 'Switch account', trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('switch') },
     { icon: 'logout', label: 'Sign out', onSelect: async () => { await signOut(); router.push('/'); router.refresh(); } },
     { divider: true, label: '' },
     { icon: theme === 'light' ? 'light_mode' : 'dark_mode', label: `Appearance: ${THEMES.find((t) => t.id === theme)!.label.replace(' theme', '')}`, trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('theme') },
@@ -260,12 +312,32 @@ function useBadges(initial: { notifications: number; messages: number }, signedI
 export function Masthead({ badges: initialBadges }: { badges: { notifications: number; messages: number } }) {
   const app = useApp();
   const pathname = usePathname();
+  const width = useWindowWidth();
   const params = useSearchParams();
   const [menu, setMenu] = useState<{ kind: 'create' | 'notif' | 'account'; el: HTMLElement } | null>(null);
   const [mobileSearch, setMobileSearch] = useState(false);
   const [badges, setBadges] = useBadges(initialBadges, !!app.me);
   const query = pathname === '/results' ? params.get('search_query') ?? '' : '';
   const close = () => setMenu(null);
+  // The masthead menus toggle on pointerdown so fast clicking never races the
+  // menu's own outside-close listener; keyboard activation comes through click.
+  const toggleMenu = (kind: 'create' | 'notif' | 'account') => ({
+    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType !== 'mouse') return;
+      const el = e.currentTarget;
+      setMenu((m) => (m?.kind === kind ? null : { kind, el }));
+    },
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (e.detail !== 0) return; // mouse already handled on pointerdown
+      const el = e.currentTarget;
+      setMenu((m) => (m?.kind === kind ? null : { kind, el }));
+    },
+  });
+  const onGuide = () => {
+    // Overlay pages keep the drawer toggle; elsewhere the hamburger collapses the guide to the icon rail.
+    if (computeGuideMode(pathname, width, app.collapsed) === 'drawer') app.setDrawer(!app.drawer);
+    else app.setCollapsed(!app.collapsed);
+  };
   const badge = (n: number) => (n > 0 ? <span className="badge">{n > 9 ? '9+' : n}</span> : null);
 
   if (mobileSearch) {
@@ -279,22 +351,22 @@ export function Masthead({ badges: initialBadges }: { badges: { notifications: n
   return (
     <header className="masthead">
       <div className="mh-start">
-        <IconButton icon="menu" label="Guide" className="guide-btn" onClick={() => app.setDrawer(!app.drawer)} />
+        <IconButton icon="menu" label="Guide" className="guide-btn" onClick={onGuide} />
         <Logo />
       </div>
       <div className="mh-center"><SearchBox key={query} initial={query} /></div>
       <div className="mh-end">
         <IconButton icon="search" label="Search" className="mobile-only" onClick={() => setMobileSearch(true)} />
-        <button type="button" className="btn btn-tonal btn-md create-btn desktop-only" onClick={(e) => setMenu({ kind: 'create', el: e.currentTarget })}>
+        <button type="button" className="btn btn-tonal btn-md create-btn desktop-only" {...toggleMenu('create')}>
           <Icon name="add" /><span className="btn-label">Create</span>
         </button>
         {app.me ? (
           <>
             <Link href="/messages" className="icon-btn badge-btn" aria-label="Messages" data-tooltip="Messages"><Icon name="chat" />{badge(badges.messages)}</Link>
-            <button type="button" className="icon-btn badge-btn" aria-label="Notifications" data-tooltip="Notifications" onClick={(e) => setMenu({ kind: 'notif', el: e.currentTarget })}>
+            <button type="button" className="icon-btn badge-btn" aria-label="Notifications" data-tooltip="Notifications" {...toggleMenu('notif')}>
               <Icon name="notifications" />{badge(badges.notifications)}
             </button>
-            <button type="button" className="avatar-btn desktop-only" aria-label="Account menu" onClick={(e) => setMenu({ kind: 'account', el: e.currentTarget })}>
+            <button type="button" className="avatar-btn desktop-only" aria-label="Account menu" aria-expanded={menu?.kind === 'account'} {...toggleMenu('account')}>
               <Avatar channel={app.me} size={32} />
             </button>
           </>
@@ -310,7 +382,6 @@ export function Masthead({ badges: initialBadges }: { badges: { notifications: n
 }
 
 /* ---------------- Guide ---------------- */
-export type GuideMode = 'full' | 'mini' | 'drawer' | 'none';
 
 function GuideLink({ href, icon, label, active, trailing, mini }: { href: string; icon: ReactNode; label: string; active?: boolean; trailing?: ReactNode; mini?: boolean }) {
   const app = useApp();
@@ -337,6 +408,7 @@ export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions:
       <nav className="guide-mini" aria-label="Main">
         <GuideLink mini href="/" icon={<Icon name="home" filled={is('/')} />} label="Home" active={is('/')} />
         <GuideLink mini href="/shorts" icon={<ShortsIcon filled={path.startsWith('/shorts')} />} label="Shorts" active={path.startsWith('/shorts')} />
+        <GuideLink mini href="/stories" icon={<Icon name="auto_stories" filled={path.startsWith('/stories')} />} label="Stories" active={path.startsWith('/stories')} />
         <GuideLink mini href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={is('/feed/subscriptions')} />} label="Subscriptions" active={is('/feed/subscriptions')} />
         <GuideLink mini href="/feed/you" icon={<Icon name="account_circle" filled={is('/feed/you')} />} label="You" active={is('/feed/you')} />
       </nav>
@@ -352,6 +424,7 @@ export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions:
         <div className="g-section">
           <GuideLink href="/" icon={<Icon name="home" filled={is('/')} />} label="Home" active={is('/')} />
           <GuideLink href="/shorts" icon={<ShortsIcon filled={path.startsWith('/shorts')} />} label="Shorts" active={path.startsWith('/shorts')} />
+          <GuideLink href="/stories" icon={<Icon name="auto_stories" filled={path.startsWith('/stories')} />} label="Stories" active={path.startsWith('/stories')} />
           <GuideLink href="/feed/subscriptions" icon={<Icon name="subscriptions" filled={is('/feed/subscriptions')} />} label="Subscriptions" active={is('/feed/subscriptions')} />
         </div>
         <div className="g-section">
@@ -391,11 +464,11 @@ export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions:
           </div>
         )}
         <div className="g-section">
+          {me?.role === 'admin' && <GuideLink href="/admin" icon={<Icon name="admin_panel_settings" />} label="Admin panel" active={path.startsWith('/admin')} />}
           <GuideLink href="/studio" icon={<Icon name="video_settings" />} label="Vidora Studio" />
           <GuideLink href="/account" icon={<Icon name="settings" />} label="Settings" active={is('/account')} />
           <GuideLink href="/about" icon={<Icon name="info" />} label="About & credits" active={is('/about')} />
         </div>
-        <footer className="g-footer">Video footage: NASA (public domain). Icons: Material Symbols. Font: Roboto.</footer>
       </nav>
     </>
   );

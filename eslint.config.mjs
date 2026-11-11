@@ -8,7 +8,7 @@ const config = [
       '@next/next/no-img-element': 'off',
     },
   },
-  { ignores: ['.next/**', 'public/**', 'node_modules/**'] },
+  { ignores: ['.next/**', '.next-verify/**', 'public/**', 'node_modules/**'] },
 ];
 
 export default config;

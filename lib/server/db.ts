@@ -2,9 +2,12 @@ import 'server-only';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import { seed } from './seed';
+import { seed, TIERS } from './seed';
 
-export const DATA_DIR = process.env.VIDORA_DATA_DIR ?? join(process.cwd(), '.data');
+// Vercel's serverless filesystem is read-only (only /tmp is writable), so the
+// database and uploads live there in production.
+export const DATA_DIR = process.env.VIDORA_DATA_DIR
+  ?? (process.env.VERCEL ? '/tmp/vidora-data' : join(process.cwd(), '.data'));
 const DB_PATH = join(DATA_DIR, 'vidora.sqlite3');
 
 const SCHEMA = `
@@ -18,6 +21,18 @@ CREATE TABLE IF NOT EXISTS users (
   avatar TEXT,
   banner TEXT,
   verified INTEGER NOT NULL DEFAULT 0,
+  role TEXT NOT NULL DEFAULT 'user',
+  pronouns TEXT NOT NULL DEFAULT '',
+  watch_seconds INTEGER NOT NULL DEFAULT 0,
+  earnings INTEGER NOT NULL DEFAULT 0,
+  earn_notified INTEGER NOT NULL DEFAULT 0,
+  contact_email TEXT NOT NULL DEFAULT '',
+  trailer_video_id TEXT,
+  featured_video_id TEXT,
+  watermark TEXT,
+  watermark_display TEXT NOT NULL DEFAULT 'end',
+  watermark_start INTEGER NOT NULL DEFAULT 8,
+  home_sections TEXT,
   subscribers INTEGER NOT NULL DEFAULT 0,
   links TEXT NOT NULL DEFAULT '[]',
   theme TEXT NOT NULL DEFAULT 'dark',
@@ -26,6 +41,31 @@ CREATE TABLE IF NOT EXISTS users (
   message_policy TEXT NOT NULL DEFAULT 'everyone',
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS live_sessions (
+  id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  title TEXT NOT NULL DEFAULT '',
+  views INTEGER NOT NULL DEFAULT 0,
+  likes INTEGER NOT NULL DEFAULT 0,
+  subs_gained INTEGER NOT NULL DEFAULT 0,
+  joins INTEGER NOT NULL DEFAULT 0,
+  gifts_cents INTEGER NOT NULL DEFAULT 0,
+  viewers INTEGER NOT NULL DEFAULT 0,
+  video_id TEXT
+);
+CREATE INDEX IF NOT EXISTS live_sessions_open ON live_sessions(ended_at);
+CREATE TABLE IF NOT EXISTS live_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+  author_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'chat',
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS live_messages_session ON live_messages(session_id, id);
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -109,8 +149,24 @@ CREATE TABLE IF NOT EXISTS posts (
   text TEXT NOT NULL DEFAULT '',
   image TEXT,
   video_id TEXT REFERENCES videos(id) ON DELETE SET NULL,
+  members_only INTEGER NOT NULL DEFAULT 0,
   likes INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS channel_tiers (
+  channel_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tier INTEGER NOT NULL,
+  price_cents INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  perks TEXT NOT NULL,
+  PRIMARY KEY (channel_id, tier)
+);
+CREATE TABLE IF NOT EXISTS memberships (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tier INTEGER NOT NULL,
+  started_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, channel_id)
 );
 CREATE INDEX IF NOT EXISTS posts_channel ON posts(channel_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS poll_options (
@@ -146,6 +202,9 @@ CREATE TABLE IF NOT EXISTS stories (
   background TEXT NOT NULL,
   text TEXT NOT NULL DEFAULT '',
   text_color TEXT NOT NULL,
+  text_pos TEXT NOT NULL DEFAULT 'middle-center',
+  views INTEGER NOT NULL DEFAULT 0,
+  likes INTEGER NOT NULL DEFAULT 0,
   video_id TEXT REFERENCES videos(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
 );
@@ -236,18 +295,67 @@ CREATE TABLE IF NOT EXISTS blocks (
   blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, blocked_id)
 );
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  reporter_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('video', 'comment', 'channel')),
+  target_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  resolved INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
 `;
 
 function open(): Database.Database {
   mkdirSync(dirname(DB_PATH), { recursive: true });
   const db = new Database(DB_PATH);
+  db.pragma('busy_timeout = 5000');
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA);
-  const seeded = db.prepare("SELECT 1 FROM users WHERE id = 'loworbit'").get();
-  if (!seeded) db.transaction(() => seed(db))();
+  // Migrations for databases created before a column existed.
+  const storyCols = (db.pragma('table_info(stories)') as { name: string }[]).map((c) => c.name);
+  if (!storyCols.includes('text_pos')) db.exec("ALTER TABLE stories ADD COLUMN text_pos TEXT NOT NULL DEFAULT 'middle-center'");
+  if (!storyCols.includes('views')) db.exec('ALTER TABLE stories ADD COLUMN views INTEGER NOT NULL DEFAULT 0');
+  if (!storyCols.includes('likes')) db.exec('ALTER TABLE stories ADD COLUMN likes INTEGER NOT NULL DEFAULT 0');
+  const userCols = (db.pragma('table_info(users)') as { name: string }[]).map((c) => c.name);
+  if (!userCols.includes('role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+  if (!userCols.includes('pronouns')) db.exec("ALTER TABLE users ADD COLUMN pronouns TEXT NOT NULL DEFAULT ''");
+  if (!userCols.includes('watch_seconds')) {
+    db.exec('ALTER TABLE users ADD COLUMN watch_seconds INTEGER NOT NULL DEFAULT 0');
+    // Established channels start with a plausible lifetime: ~3 minutes of watch time per subscriber.
+    db.exec('UPDATE users SET watch_seconds = subscribers * 180');
+  }
+  if (!userCols.includes('earnings')) db.exec('ALTER TABLE users ADD COLUMN earnings INTEGER NOT NULL DEFAULT 0');
+  if (!userCols.includes('earn_notified')) db.exec('ALTER TABLE users ADD COLUMN earn_notified INTEGER NOT NULL DEFAULT 0');
+  if (!userCols.includes('contact_email')) db.exec("ALTER TABLE users ADD COLUMN contact_email TEXT NOT NULL DEFAULT ''");
+  if (!userCols.includes('trailer_video_id')) db.exec('ALTER TABLE users ADD COLUMN trailer_video_id TEXT');
+  if (!userCols.includes('featured_video_id')) db.exec('ALTER TABLE users ADD COLUMN featured_video_id TEXT');
+  if (!userCols.includes('watermark')) db.exec('ALTER TABLE users ADD COLUMN watermark TEXT');
+  if (!userCols.includes('watermark_display')) db.exec("ALTER TABLE users ADD COLUMN watermark_display TEXT NOT NULL DEFAULT 'end'");
+  if (!userCols.includes('watermark_start')) db.exec('ALTER TABLE users ADD COLUMN watermark_start INTEGER NOT NULL DEFAULT 8');
+  if (!userCols.includes('home_sections')) db.exec('ALTER TABLE users ADD COLUMN home_sections TEXT');
+  const liveCols = (db.pragma('table_info(live_sessions)') as { name: string }[]).map((c) => c.name);
+  if (liveCols.length && !liveCols.includes('viewers')) db.exec('ALTER TABLE live_sessions ADD COLUMN viewers INTEGER NOT NULL DEFAULT 0');
+  if (liveCols.length && !liveCols.includes('video_id')) db.exec('ALTER TABLE live_sessions ADD COLUMN video_id TEXT');
+  const postCols = (db.pragma('table_info(posts)') as { name: string }[]).map((c) => c.name);
+  if (!postCols.includes('members_only')) db.exec('ALTER TABLE posts ADD COLUMN members_only INTEGER NOT NULL DEFAULT 0');
+  // Backfill default membership tiers for channels created before this existed.
+  const untiered = db.prepare('SELECT id FROM users WHERE NOT EXISTS (SELECT 1 FROM channel_tiers t WHERE t.channel_id = users.id)').all() as { id: string }[];
+  if (untiered.length) {
+    const insert = db.prepare('INSERT OR IGNORE INTO channel_tiers (channel_id, tier, price_cents, name, perks) VALUES (?, ?, ?, ?, ?)');
+    for (const u of untiered) for (const t of TIERS) insert.run(u.id, t.tier, t.price_cents, t.name, JSON.stringify(t.perks));
+  }
+  // The first real (password) account owns this deployment and administers it.
+  db.exec("UPDATE users SET role = 'admin' WHERE password_hash IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')");
+  // Build workers import this module concurrently; take the write lock before
+  // checking whether the seed exists so only one of them runs it.
+  const seedIfNeeded = db.transaction(() => {
+    const seeded = db.prepare("SELECT 1 FROM users WHERE id = 'loworbit'").get();
+    if (!seeded) seed(db);
+  });
+  seedIfNeeded.immediate();
   return db;
 }
 

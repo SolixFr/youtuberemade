@@ -9,7 +9,33 @@ import { sql } from './db';
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: object) => Promise<Buffer>;
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const SESSION_COOKIE = 'vidora_session';
+const ACCOUNTS_COOKIE = 'vidora_accounts';
 const SESSION_DAYS = 30;
+const accountsOpts = () => ({ httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production' && process.env.VIDORA_INSECURE_COOKIES !== '1', path: '/', maxAge: SESSION_DAYS * 86_400 });
+
+/** Ids of the accounts signed in on this device, most-recent first (max 5). */
+export async function listAccountIds(): Promise<string[]> {
+  const raw = (await cookies()).get(ACCOUNTS_COOKIE)?.value;
+  try {
+    const ids = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string').slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remember a newly signed-in account on this device. */
+export async function pushAccountId(userId: string): Promise<void> {
+  const cur = await listAccountIds();
+  const next = [userId, ...cur.filter((x) => x !== userId)].slice(0, 5);
+  (await cookies()).set(ACCOUNTS_COOKIE, JSON.stringify(next), accountsOpts());
+}
+
+/** Forget an account on this device (e.g. after signing out). */
+export async function removeAccountId(userId: string): Promise<void> {
+  const next = (await listAccountIds()).filter((x) => x !== userId);
+  (await cookies()).set(ACCOUNTS_COOKIE, JSON.stringify(next), accountsOpts());
+}
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
@@ -48,7 +74,7 @@ export async function destroySession(): Promise<void> {
 }
 
 interface UserRow {
-  id: string; handle: string; name: string; avatar: string | null; subscribers: number;
+  id: string; handle: string; name: string; avatar: string | null; subscribers: number; role: 'user' | 'admin'; pronouns: string;
   theme: Theme; autoplay: number; history_paused: number; message_policy: MessagePolicy;
 }
 
@@ -56,24 +82,30 @@ interface UserRow {
 export const getMe = cache(async (): Promise<Me | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const row = sql(`SELECT u.id, u.handle, u.name, u.avatar, u.subscribers, u.theme, u.autoplay, u.history_paused, u.message_policy
+  const row = sql(`SELECT u.id, u.handle, u.name, u.avatar, u.subscribers, u.role, u.pronouns, u.theme, u.autoplay, u.history_paused, u.message_policy
     FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND s.expires_at > ?`).get(hashToken(token), Date.now()) as UserRow | undefined;
   if (!row) return null;
   return {
-    id: row.id, handle: row.handle, name: row.name, avatar: row.avatar, subscribers: row.subscribers,
+    id: row.id, handle: row.handle, name: row.name, avatar: row.avatar, subscribers: row.subscribers, role: row.role, pronouns: row.pronouns,
     settings: { theme: row.theme, autoplay: !!row.autoplay, historyPaused: !!row.history_paused, messagePolicy: row.message_policy },
   };
 });
 
 export class AuthError extends Error {
-  constructor() {
-    super('Sign in to continue');
+  constructor(message = 'Sign in to continue') {
+    super(message);
   }
 }
 
 export async function requireMe(): Promise<Me> {
   const me = await getMe();
   if (!me) throw new AuthError();
+  return me;
+}
+
+export async function requireAdmin(): Promise<Me> {
+  const me = await requireMe();
+  if (me.role !== 'admin') throw new AuthError('Admins only');
   return me;
 }
 

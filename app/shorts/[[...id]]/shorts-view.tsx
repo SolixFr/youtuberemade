@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '@/components/app-context';
 import { VideoMenuButton } from '@/components/cards';
 import { Comments, SubscribeButton } from '@/components/social';
@@ -13,7 +13,7 @@ import type { Comment, Video, ViewerVideoState } from '@/lib/types';
 
 const prefs = { muted: false };
 
-function ShortSlot({ v, state, active, onComments }: { v: Video; state: ViewerVideoState; active: boolean; onComments: () => void }) {
+function ShortSlot({ v, state, active, commentsOpen, onComments }: { v: Video; state: ViewerVideoState; active: boolean; commentsOpen: boolean; onComments: () => void }) {
   const app = useApp();
   const toast = useToast();
   const ref = useRef<HTMLVideoElement>(null);
@@ -76,7 +76,7 @@ function ShortSlot({ v, state, active, onComments }: { v: Video; state: ViewerVi
       <div className="short-actions">
         <div className="short-action"><IconButton icon="thumb_up" filled={rating === 1} className={rating === 1 ? 'on' : ''} label="Like" onClick={() => rate(1)} /><span>{formatCount(likes)}</span></div>
         <div className="short-action"><IconButton icon="thumb_down" filled={rating === -1} className={rating === -1 ? 'on' : ''} label="Dislike" onClick={() => rate(-1)} /><span>Dislike</span></div>
-        <div className="short-action"><IconButton icon="comment" filled label="Comments" onClick={onComments} /><span>Comments</span></div>
+        <div className="short-action"><IconButton icon="comment" filled={commentsOpen} className={commentsOpen ? 'on' : ''} label="Comments" onClick={onComments} /><span>Comments</span></div>
         <div className="short-action"><IconButton icon="share" filled label="Share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/shorts/${v.id}` })} /><span>Share</span></div>
         <div className="short-action"><VideoMenuButton v={v} className="short-more" /></div>
       </div>
@@ -84,14 +84,21 @@ function ShortSlot({ v, state, active, onComments }: { v: Video; state: ViewerVi
   );
 }
 
-function CommentsPanel({ video, onClose }: { video: Video; onClose: () => void }) {
-  const [list, setList] = useState<Comment[] | null>(null);
-  useEffect(() => { loadComments(video.id).then((r) => setList(r.ok ? r.data : [])); }, [video.id]);
+function CommentsPanel({ video, closing, onClose }: { video: Video; closing?: boolean; onClose: () => void }) {
+  // The loaded list is tagged with the video it belongs to; while the next
+  // short's comments load, `current` is null and the panel shows the spinner.
+  const [list, setList] = useState<{ videoId: string; comments: Comment[] } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadComments(video.id).then((r) => { if (alive) setList({ videoId: video.id, comments: r.ok ? r.data : [] }); });
+    return () => { alive = false; };
+  }, [video.id]);
+  const current = list?.videoId === video.id ? list.comments : null;
   return (
-    <aside className="shorts-comments">
-      <div className="shorts-comments-head"><h2>Comments {list && <span className="muted">{list.length}</span>}</h2><IconButton icon="close" label="Close" onClick={onClose} /></div>
+    <aside className={`shorts-comments ${closing ? 'closing' : ''}`}>
+      <div className="shorts-comments-head"><h2>Comments {current && <span className="muted">{current.length}</span>}</h2><IconButton icon="close" label="Close" onClick={onClose} /></div>
       <div className="shorts-comments-body">
-        {list ? <Comments videoId={video.id} owner={video.channel} initial={list} compact /> : <div className="center-pad"><Spinner /></div>}
+        {current ? <Comments videoId={video.id} owner={video.channel} initial={current} compact /> : <div className="center-pad"><Spinner /></div>}
       </div>
     </aside>
   );
@@ -100,7 +107,14 @@ function CommentsPanel({ video, onClose }: { video: Video; onClose: () => void }
 export function ShortsView({ shorts }: { shorts: { video: Video; state: ViewerVideoState }[] }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(shorts[0].video.id);
-  const [commentsFor, setCommentsFor] = useState<Video | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsClosing, setCommentsClosing] = useState(false);
+
+  const closeComments = useCallback(() => {
+    setCommentsClosing(true);
+    setTimeout(() => { setCommentsClosing(false); setCommentsOpen(false); }, 200);
+  }, []);
+  const activeVideo = shorts.find((s) => s.video.id === active)?.video ?? null;
 
   useEffect(() => {
     const root = scroller.current;
@@ -134,10 +148,10 @@ export function ShortsView({ shorts }: { shorts: { video: Video; state: ViewerVi
     <>
       <div className="shorts-page" ref={scroller}>
         {shorts.map(({ video, state }) => (
-          <ShortSlot key={video.id} v={video} state={state} active={video.id === active} onComments={() => setCommentsFor(commentsFor?.id === video.id ? null : video)} />
+          <ShortSlot key={video.id} v={video} state={state} active={video.id === active} commentsOpen={commentsOpen} onComments={() => (commentsOpen ? closeComments() : setCommentsOpen(true))} />
         ))}
       </div>
-      {commentsFor && <CommentsPanel key={commentsFor.id} video={commentsFor} onClose={() => setCommentsFor(null)} />}
+      {commentsOpen && activeVideo && <CommentsPanel video={activeVideo} closing={commentsClosing} onClose={closeComments} />}
       <div className="shorts-nav">
         <IconButton icon="arrow_upward" label="Previous video" onClick={() => step(-1)} />
         <IconButton icon="arrow_downward" label="Next video" onClick={() => step(1)} />

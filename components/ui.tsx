@@ -8,6 +8,28 @@ import {
 import { createPortal } from 'react-dom';
 import type { ChannelLite, StoryState } from '@/lib/types';
 
+/** Member tier colors, like YouTube's loyalty badge levels. */
+export const MEMBER_TIER_COLORS = ['#9aa0a6', '#3ea6ff', '#2ba640', '#ab47bc', '#ffd600'];
+
+/** YouTube-style loyalty star next to a commenter/poster; colored by tier. */
+export function MemberBadge({ tier, name }: { tier: number; name?: string }) {
+  const color = MEMBER_TIER_COLORS[(tier - 1) % MEMBER_TIER_COLORS.length];
+  return (
+    <span className="member-badge" style={{ color }} role="img" aria-label={name ? `Member · ${name}` : `Member, tier ${tier}`} title={name ? `Member · ${name}` : `Member, tier ${tier}`}>
+      <Icon name="loyalty" filled size={18} />
+    </span>
+  );
+}
+
+/** The exact confirmed-check glyph YouTube renders: a filled disc with the check punched out. */
+export function CheckCircleIcon({ size = 24, className = '', style }: { size?: number; className?: string; style?: CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} style={{ display: 'block', ...style }} aria-hidden="true" focusable="false" fill="currentColor">
+      <path d="M12 1C5.925 1 1 5.925 1 12s4.925 11 11 11 11-4.925 11-11S18.075 1 12 1Zm5.707 7.293a1 1 0 010 1.414L10 17.414l-3.707-3.707a1 1 0 111.414-1.414L10 14.586l6.293-6.293a1 1 0 011.414 0Z" />
+    </svg>
+  );
+}
+
 /* ---------- Icon (Material Symbols) ---------- */
 export function Icon({ name, filled, size = 24, className = '', style }: { name: string; filled?: boolean; size?: number; className?: string; style?: CSSProperties }) {
   return (
@@ -116,6 +138,13 @@ function subscribeMedia(cb: () => void) {
 }
 export function useIsMobile(): boolean {
   return useSyncExternalStore(subscribeMedia, () => matchMedia(mobileQuery).matches, () => false);
+}
+function subscribeResize(cb: () => void) {
+  window.addEventListener('resize', cb);
+  return () => window.removeEventListener('resize', cb);
+}
+export function useWindowWidth(): number {
+  return useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 1440);
 }
 
 function Portal({ children }: { children: ReactNode }) {
@@ -255,7 +284,7 @@ export function Dialog({ title, onClose, children, footer, width = 520, classNam
     <Portal>
       <div className={`dialog-scrim ${closing ? 'closing' : ''}`} onMouseDown={(e) => dismissable && e.target === e.currentTarget && close()}>
         <div ref={box} className={`dialog ${className}`} role="dialog" aria-modal="true" style={{ width }}>
-          {title !== undefined && (
+          {title !== undefined && title !== '' && (
             <div className="dialog-head">
               <h2>{title}</h2>
               <IconButton icon="close" label="Close" onClick={close} />

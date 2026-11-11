@@ -61,7 +61,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const [captions, setCaptions] = useState(prefs.captions);
   const [ambientOn, setAmbientOn] = useState(prefs.ambient);
   const [loop, setLoop] = useState(!!clip);
-  const [settings, setSettings] = useState<null | 'main' | 'speed' | 'sleep'>(null);
+  const [settings, setSettings] = useState<null | 'main' | 'speed' | 'sleep' | 'chapters'>(null);
   const [sleepAt, setSleepAt] = useState<number | null>(null);
   const [ui, setUi] = useState(true);
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -340,6 +340,18 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 <button type="button" className="p-menu-row" onClick={() => setSettings('speed')}><Icon name="slow_motion_video" /><span>Playback speed</span><span className="p-val">{rate === 1 ? 'Normal' : rate}</span><Icon name="chevron_right" /></button>
               </>
             )}
+            {settings === 'chapters' && (
+              <>
+                <button type="button" className="p-menu-head" onClick={() => setSettings(null)}><Icon name="chevron_left" />Chapters</button>
+                {chapters.map((c) => (
+                  <button type="button" key={c.t} className="p-menu-row" onClick={() => { const el = video.current!; el.currentTime = c.t; setT(c.t); setSettings(null); }}>
+                    <span className="p-check">{chapterNow?.t === c.t && <Icon name="check" />}</span>
+                    <span>{c.title}</span>
+                    <span className="p-val">{formatDuration(c.t)}</span>
+                  </button>
+                ))}
+              </>
+            )}
             {settings === 'speed' && (
               <>
                 <button type="button" className="p-menu-head" onClick={() => setSettings('main')}><Icon name="chevron_left" />Playback speed</button>
@@ -402,7 +414,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 onChange={(e) => { const el = video.current!; el.volume = Number(e.target.value); el.muted = el.volume === 0; prefs.volume = el.volume; prefs.muted = el.muted; }} />
             </div>
             <span className="p-time">{formatDuration(t)} <span className="p-time-sep">/</span> {formatDuration(dur)}</span>
-            {chapterNow && <span className="p-chapter hide-compact">· {chapterNow.title} <Icon name="chevron_right" size={18} /></span>}
+            {chapterNow && <button type="button" className={`p-chapter hide-compact ${settings === 'chapters' ? 'on' : ''}`} onClick={() => setSettings(settings === 'chapters' ? null : 'chapters')} aria-label="Chapters" data-tip="Chapters">· {chapterNow.title} <Icon name="chevron_right" size={18} /></button>}
             <span className="grow" />
             {!compact && onAutoplayNext && (
               <span className="p-autoplay hide-mobile" data-tip={`Autoplay is ${autoplayNext ? 'on' : 'off'}`}>

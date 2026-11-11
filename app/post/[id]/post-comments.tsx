@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Ago } from '@/components/ago';
 import { useApp } from '@/components/app-context';
-import { Avatar, Button, useToast } from '@/components/ui';
+import { Avatar, Button, MemberBadge, useToast } from '@/components/ui';
 import { commentOnPost } from '@/lib/actions/social';
 import type { PostComment } from '@/lib/types';
 
@@ -36,7 +36,7 @@ export function PostComments({ postId, initial }: { postId: string; initial: Pos
       {list.map((c) => (
         <div key={c.id} className="comment">
           <Avatar name={c.author.name} src={c.author.avatar} size={40} />
-          <div className="c-body"><div className="c-who"><span>{c.author.handle}</span><span className="c-when"><Ago ts={c.createdAt} /></span></div><div className="c-text">{c.text}</div></div>
+          <div className="c-body"><div className="c-who"><span>{c.author.handle}</span>{c.author.membership && <MemberBadge tier={c.author.membership.tier} name={c.author.membership.name} />}<span className="c-when"><Ago ts={c.createdAt} /></span></div><div className="c-text">{c.text}</div></div>
         </div>
       ))}
     </section>

@@ -9,7 +9,7 @@ import { ChannelAvatar, CompactCard, Thumbnail, VerifiedBadge, useWatchLater } f
 import { Player, type PlayerHandle } from '@/components/player';
 import { Comments, RichText, SubscribeButton } from '@/components/social';
 import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
-import { updateSettings } from '@/lib/actions/channels';
+import { setSubscribed, updateSettings } from '@/lib/actions/channels';
 import { rateVideo, recordView } from '@/lib/actions/videos';
 import { formatCount, formatDate, formatDuration, parseChapters } from '@/lib/format';
 import type { Comment, Video, ViewerVideoState } from '@/lib/types';
@@ -46,9 +46,10 @@ function UpNext({ next, onPlay, onCancel }: { next: Video; onPlay: () => void; o
   );
 }
 
-export function WatchView({ video: v, state, comments, related, playlist, startAt, clip, autoplayNext: initialAutoplay }: {
+export function WatchView({ video: v, state, comments, related, playlist, startAt, clip, autoplayNext: initialAutoplay, watermark }: {
   video: Video; state: ViewerVideoState; comments: Comment[]; related: Video[];
   playlist: { id: string; title: string; videos: Video[] } | null; startAt?: number; clip?: { start: number; end: number }; autoplayNext: boolean;
+  watermark?: { src: string; display: 'end' | 'custom' | 'full'; start: number; channelName: string; handle: string } | null;
 }) {
   const app = useApp();
   const toast = useToast();
@@ -67,6 +68,20 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   const [likes, setLikes] = useState(v.likes);
   const [subs, setSubs] = useState(v.channel.subscribers);
   const [autoplay, setAutoplay] = useState(initialAutoplay);
+  const [likeBurst, setLikeBurst] = useState(0);
+  const [dislikeBurst, setDislikeBurst] = useState(0);
+  const [nearEnd, setNearEnd] = useState(false);
+  const [wmSubbed, setWmSubbed] = useState(state.subscribed);
+  const wmVisible = !!watermark && !wmSubbed && app.me?.id !== v.channel.id && (watermark.display === 'full' || nearEnd || ended);
+  const onTimeTick = (t: number) => { time.current = t; if (watermark && watermark.display !== 'full') setNearEnd(t >= (watermark.display === 'custom' ? watermark.start : v.duration - 8)); };
+  const subscribeFromWm = async () => {
+    if (!app.me) { router.push(`/signin?next=${encodeURIComponent(`/watch?v=${v.id}`)}`); return; }
+    const r = await setSubscribed(v.channel.id, true);
+    if (!r.ok) return toast(r.error);
+    setSubs(r.data);
+    setWmSubbed(true);
+    toast(`You’re subscribed to ${watermark!.channelName}`);
+  };
 
   useEffect(() => {
     void recordView(v.id, viewKey());
@@ -97,6 +112,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   };
 
   const rate = (value: 1 | -1) => app.requireAuth(value === 1 ? 'Like this video?' : 'Don’t like this video?', async () => {
+    if (value === 1) setLikeBurst((n) => n + 1); else setDislikeBurst((n) => n + 1);
     const target = rating === value ? 0 : value;
     const prev = { rating, likes };
     setRating(target);
@@ -154,8 +170,13 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             onTheater={() => { const t = !theater; setTheater(t); try { localStorage.setItem('vidora-theater', t ? '1' : '0'); } catch { /* storage blocked */ } }}
             onMini={(t, playing) => { app.setMini({ videoId: v.id, title: v.title, channelName: v.channel.name, src: v.src, captions: v.captions, duration: v.duration, time: t, playing }); router.push('/'); }}
             onNext={nextHref ? goNext : undefined}
-            onTime={(t) => { time.current = t; }}
+            onTime={(t) => onTimeTick(t)}
             onEnded={() => { if (!autoplay || clip) return; if (next) setEnded(true); else if (nextHref) goNext(); }} />
+          {wmVisible && (
+            <button type="button" className="wm-btn" aria-label={`Subscribe to ${watermark!.channelName}`} data-tooltip={`Subscribe to ${watermark!.channelName}`} onClick={subscribeFromWm}>
+              <img src={watermark!.src} alt="" />
+            </button>
+          )}
           {ended && next && <UpNext next={next} onPlay={goNext} onCancel={() => setEnded(false)} />}
         </div>
         <div className="watch-info">
@@ -172,13 +193,13 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             </div>
             <div className="w-buttons">
               <div className="seg">
-                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon name="thumb_up" filled={rating === 1} />{formatCount(likes)}</button>
-                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon name="thumb_down" filled={rating === -1} /></button>
+                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon key={likeBurst} name="thumb_up" filled={rating === 1} className={likeBurst ? 'seg-burst' : ''} />{formatCount(likes)}</button>
+                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /></button>
               </div>
-              <Button icon="share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })}>Share</Button>
-              <Button icon="download" onClick={download}>Download</Button>
-              <Button icon="content_cut" onClick={() => app.open({ kind: 'clip', videoId: v.id, at: time.current, duration: v.duration, title: v.title })}>Clip</Button>
-              <Button icon="playlist_add" onClick={() => app.requireAuth('Sign in to save this video', () => app.open({ kind: 'save', videoId: v.id }))}>Save</Button>
+              <Button icon="share" data-tooltip="Share" aria-label="Share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
+              <Button icon="download" data-tooltip="Download" aria-label="Download" onClick={download} />
+              <Button icon="content_cut" data-tooltip="Clip" aria-label="Clip" onClick={() => app.open({ kind: 'clip', videoId: v.id, at: time.current, duration: v.duration, title: v.title })} />
+              <Button icon="playlist_add" data-tooltip="Save" aria-label="Save" onClick={() => app.requireAuth('Sign in to save this video', () => app.open({ kind: 'save', videoId: v.id }))} />
               <Button icon="more_horiz" aria-label="More actions" onClick={(e) => setMoreAnchor(e.currentTarget)} />
             </div>
           </div>
@@ -223,7 +244,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
       </aside>
       {moreAnchor && <Menu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={[
         { icon: 'schedule', label: 'Save to Watch later', onSelect: () => watchLater(v.id) },
-        { icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'video' }) },
+        { icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'video', targetId: v.id }) },
         ...(app.me?.id === v.channel.id ? [{ icon: 'edit', label: 'Edit video', href: `/studio/video/${v.id}` }] : []),
       ]} />}
     </div>

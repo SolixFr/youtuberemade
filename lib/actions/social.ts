@@ -1,14 +1,23 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { id, Invalid, newId, run, text } from '@/lib/server/action';
 import { getMe, rateLimit, requireMe } from '@/lib/server/auth';
 import { sql, tx } from '@/lib/server/db';
-import { comments, getVideo, postComments, posts, STORY_MIN_SUBS, storyGroups } from '@/lib/server/queries';
+import { canSeeMembersOnly, comments, getVideo, monetization, postComments, posts, STORY_MIN_SUBS, storyGroups } from '@/lib/server/queries';
 import { claimUpload, deleteUpload } from '@/lib/server/storage';
 
 const floodCheck = (userId: string) => {
   if (!rateLimit(`write:${userId}`, 30, 60_000)) throw new Invalid('You’re doing that too fast. Wait a moment and try again.');
 };
+
+/** Throws unless the viewer may read this post (members-only posts: owner/member only). */
+function requireViewablePost(postId: string, viewerId: string | null | undefined) {
+  const p = sql('SELECT channel_id, members_only FROM posts WHERE id = ?').get(id(postId)) as { channel_id: string; members_only: number } | undefined;
+  if (!p) throw new Invalid('Post not found');
+  if (p.members_only && !canSeeMembersOnly(viewerId, p.channel_id)) throw new Invalid('This post is for members only');
+  return p;
+}
 
 /* ---------------- video comments ---------------- */
 export async function addComment(videoId: string, body: string, parentId?: string) {
@@ -92,7 +101,7 @@ export async function moderateComment(commentId: string, change: 'pin' | 'unpin'
 }
 
 /* ---------------- posts ---------------- */
-export async function createPost(input: { text: string; image?: string | null; poll?: string[]; videoId?: string }) {
+export async function createPost(input: { text: string; image?: string | null; poll?: string[]; videoId?: string; membersOnly?: boolean }) {
   return run(async () => {
     const me = await requireMe();
     floodCheck(me.id);
@@ -108,9 +117,14 @@ export async function createPost(input: { text: string; image?: string | null; p
     const options = (input.poll ?? []).map((o) => text(o, 'Poll option', { min: 1, max: 65 }));
     if (input.poll && (options.length < 2 || options.length > 5)) throw new Invalid('Polls need 2–5 options');
     if (!body && !image && !videoId) throw new Invalid('Write something first');
+    if (input.membersOnly) {
+      const t = sql('SELECT COUNT(*) n FROM channel_tiers WHERE channel_id = ?').get(me.id) as { n: number };
+      if (!t.n) throw new Invalid('Memberships aren’t enabled for this channel yet');
+      if (!monetization(me.id).memberships) throw new Invalid('Memberships aren’t unlocked yet — meet the eligibility requirements first');
+    }
     const pid = newId('p');
     tx(() => {
-      sql('INSERT INTO posts (id, channel_id, text, image, video_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(pid, me.id, body, image, videoId, Date.now());
+      sql('INSERT INTO posts (id, channel_id, text, image, video_id, members_only, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(pid, me.id, body, image, videoId, input.membersOnly ? 1 : 0, Date.now());
       options.forEach((o, i) => sql('INSERT INTO poll_options (post_id, idx, text) VALUES (?, ?, ?)').run(pid, i, o));
     });
     return pid;
@@ -136,7 +150,7 @@ export async function deletePost(postId: string) {
 export async function likePost(postId: string, on: boolean) {
   return run(async () => {
     const me = await requireMe();
-    if (!sql('SELECT 1 FROM posts WHERE id = ?').get(id(postId))) throw new Invalid('Post not found');
+    requireViewablePost(postId, me.id);
     return tx(() => {
       const has = !!sql('SELECT 1 FROM post_likes WHERE user_id = ? AND post_id = ?').get(me.id, postId);
       if (on && !has) { sql('INSERT INTO post_likes (user_id, post_id) VALUES (?, ?)').run(me.id, postId); sql('UPDATE posts SET likes = likes + 1 WHERE id = ?').run(postId); }
@@ -147,9 +161,70 @@ export async function likePost(postId: string, on: boolean) {
 }
 
 /** Vote for a poll option, or pass null to take the vote back. Returns the updated poll. */
+/** Live poll state for a post — the same shape PostCard renders. */
+/* ---------------- memberships ---------------- */
+export async function joinChannel(channelId: string, tier: number) {
+  return run(async () => {
+    const me = await requireMe();
+    if (me.id === channelId) throw new Invalid('You own this channel');
+    const channels = sql('SELECT id FROM users WHERE id = ?').get(channelId) as { id: string } | undefined;
+    if (!channels) throw new Invalid('Channel not found');
+    if (!monetization(channelId).memberships) throw new Invalid('This channel hasn’t unlocked memberships yet');
+    const t = sql('SELECT price_cents FROM channel_tiers WHERE channel_id = ? AND tier = ?').get(channelId, tier) as { price_cents: number } | undefined;
+    if (!t) throw new Invalid('No such membership tier');
+    const existing = sql('SELECT tier FROM memberships WHERE user_id = ? AND channel_id = ?').get(me.id, channelId) as { tier: number } | undefined;
+    sql('INSERT OR REPLACE INTO memberships (user_id, channel_id, tier, started_at) VALUES (?, ?, ?, ?)').run(me.id, channelId, tier, Date.now());
+    // Creator gets 70% of the monthly fee up front — once per tier change, never on repeat taps.
+    if (!existing || existing.tier !== tier) {
+      sql('UPDATE users SET earnings = earnings + ? WHERE id = ?').run(Math.floor(t.price_cents * 0.7), channelId);
+    }
+    revalidatePath('/', 'layout');
+    return null;
+  });
+}
+
+export async function leaveChannel(channelId: string) {
+  return run(async () => {
+    const me = await requireMe();
+    if (!sql('DELETE FROM memberships WHERE user_id = ? AND channel_id = ?').run(me.id, channelId).changes) {
+      throw new Invalid('You’re not a member of this channel');
+    }
+    revalidatePath('/', 'layout');
+    return null;
+  });
+}
+
+export async function studioMembersRoster(channelId: string) {
+  return run(async () => {
+    const me = await requireMe();
+    if (me.id !== channelId) throw new Invalid('Not your channel');
+    return (sql(`SELECT u.id, u.handle, u.name, u.avatar, m.tier, m.started_at FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ? ORDER BY m.tier DESC, m.started_at DESC`).all(channelId) as { id: string; handle: string; name: string; avatar: string | null; tier: number; started_at: number }[]);
+  });
+}
+export async function studioMembersStats(channelId: string) {
+  return run(async () => {
+    const me = await requireMe();
+    if (me.id !== channelId) throw new Invalid('Not your channel');
+    const row = sql(`SELECT COALESCE(SUM(t.price_cents), 0) revenue, COUNT(*) members FROM memberships m JOIN channel_tiers t ON t.channel_id = m.channel_id AND t.tier = m.tier WHERE m.channel_id = ?`).get(channelId) as { revenue: number; members: number };
+    return { revenueCents: row.revenue, memberCount: row.members, creatorShareCents: Math.round(row.revenue * 0.7) };
+  });
+}
+
+export async function refreshPost(postId: string) {
+  return run(async () => {
+    const me = await getMe();
+    requireViewablePost(postId, me?.id);
+    const row = sql(`SELECT p.*, (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) n_comments FROM posts p WHERE p.id = ?`).get(postId) as { likes: number; n_comments: number };
+    const options = sql('SELECT text, votes FROM poll_options WHERE post_id = ? ORDER BY idx').all(postId) as { text: string; votes: number }[];
+    const myVote = me ? (sql('SELECT idx FROM poll_votes WHERE user_id = ? AND post_id = ?').get(me.id, postId) as { idx: number } | undefined)?.idx ?? null : null;
+    return { id: postId, likes: row.likes, comments: row.n_comments, poll: options.length ? options : null, myVote };
+  });
+}
+
 export async function votePoll(postId: string, idx: number | null) {
   return run(async () => {
     const me = await requireMe();
+    requireViewablePost(postId, me.id);
     const n = (sql('SELECT COUNT(*) n FROM poll_options WHERE post_id = ?').get(id(postId)) as { n: number }).n;
     if (!n || (idx !== null && (!Number.isInteger(idx) || idx < 0 || idx >= n))) throw new Invalid('Poll not found');
     tx(() => {
@@ -171,7 +246,7 @@ export async function commentOnPost(postId: string, body: string) {
   return run(async () => {
     const me = await requireMe();
     floodCheck(me.id);
-    if (!sql('SELECT 1 FROM posts WHERE id = ?').get(id(postId))) throw new Invalid('Post not found');
+    requireViewablePost(postId, me.id);
     sql('INSERT INTO post_comments (id, post_id, author_id, text, created_at) VALUES (?, ?, ?, ?, ?)').run(newId('pc'), postId, me.id, text(body, 'Comment', { min: 1, max: 5000 }), Date.now());
     return postComments(postId, me.id);
   });
@@ -179,8 +254,9 @@ export async function commentOnPost(postId: string, body: string) {
 
 /* ---------------- stories ---------------- */
 const COLOR = /^#[0-9a-f]{6}$/i;
+const TEXT_POS = new Set(['top-left', 'top-center', 'top-right', 'middle-left', 'middle-center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right']);
 
-export async function createStory(input: { image?: string | null; text: string; background: string; textColor: string; videoId?: string }) {
+export async function createStory(input: { image?: string | null; text: string; background: string; textColor: string; textPos?: string; videoId?: string }) {
   return run(async () => {
     const me = await requireMe();
     if (me.subscribers < STORY_MIN_SUBS) throw new Invalid(`Stories are available to channels with ${STORY_MIN_SUBS.toLocaleString()}+ subscribers`);
@@ -189,14 +265,15 @@ export async function createStory(input: { image?: string | null; text: string; 
     const image = input.image ? claimUpload(input.image, me.id, 'image') : null;
     if (!t && !image) throw new Invalid('Add some text or a photo');
     if (!COLOR.test(input.background) || !COLOR.test(input.textColor)) throw new Invalid('Invalid color');
+    const textPos = input.textPos && TEXT_POS.has(input.textPos) ? input.textPos : 'middle-center';
     let videoId: string | null = null;
     if (input.videoId) {
       const v = sql("SELECT id FROM videos WHERE id = ? AND channel_id = ? AND visibility = 'public'").get(id(input.videoId), me.id) as { id: string } | undefined;
       if (!v) throw new Invalid('You can only link your own public videos');
       videoId = v.id;
     }
-    sql('INSERT INTO stories (id, channel_id, image, background, text, text_color, video_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(newId('st'), me.id, image, input.background, t, input.textColor, videoId, Date.now());
+    sql('INSERT INTO stories (id, channel_id, image, background, text, text_color, text_pos, video_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(newId('st'), me.id, image, input.background, t, input.textColor, textPos, videoId, Date.now());
     return null;
   });
 }
@@ -226,7 +303,10 @@ export async function loadStories(startChannel: string) {
 export async function markStorySeen(storyId: string) {
   return run(async () => {
     const me = await getMe();
-    if (me) sql('INSERT OR IGNORE INTO story_views (user_id, story_id) VALUES (?, ?)').run(me.id, id(storyId));
+    if (!me) return null;
+    const r = sql('INSERT OR IGNORE INTO story_views (user_id, story_id) VALUES (?, ?)').run(me.id, id(storyId));
+    // A story's view counter ticks once per unique viewer.
+    if (r.changes) sql('UPDATE stories SET views = views + 1 WHERE id = ?').run(storyId);
     return null;
   });
 }

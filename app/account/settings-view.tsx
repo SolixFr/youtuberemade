@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { applyTheme } from '@/components/chrome';
 import { Button, Switch, useToast } from '@/components/ui';
 import { signOut } from '@/lib/actions/auth';
+import { formatCount } from '@/lib/format';
 import { setBell, updateSettings } from '@/lib/actions/channels';
 import type { BellLevel, Me, MessagePolicy, Theme } from '@/lib/types';
 
@@ -24,7 +25,12 @@ export function SettingsView({ me, subscriptions }: { me: Me; subscriptions: { i
       <section className="settings-card">
         <h2>Account</h2>
         <div className="settings-row"><span>Channel</span><span className="muted">{me.name} ({me.handle})</span></div>
-        <div className="settings-row"><span>Subscribers</span><span className="muted">{me.subscribers.toLocaleString()}</span></div>
+        <div className="settings-row"><span>Pronouns</span>
+          <input className="input pronouns-input" defaultValue={me.pronouns} maxLength={40} placeholder="Not set" aria-label="Your pronouns"
+            onBlur={(e) => { const v = e.target.value.trim(); if (v !== me.pronouns) void save({ pronouns: v }); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+        </div>
+        <div className="settings-row"><span>Subscribers</span><span className="muted">{formatCount(me.subscribers)}</span></div>
         <div className="settings-row"><span>Stories</span><span className="muted">{me.subscribers >= 10_000 ? 'Available' : 'Unlocks at 10,000 subscribers'}</span></div>
         <div className="settings-row"><span>Session</span><Button size="sm" icon="logout" onClick={async () => { await signOut(); router.push('/'); router.refresh(); }}>Sign out</Button></div>
       </section>

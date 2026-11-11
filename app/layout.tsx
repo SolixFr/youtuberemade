@@ -1,7 +1,6 @@
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
-import 'material-symbols/outlined.css';
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';

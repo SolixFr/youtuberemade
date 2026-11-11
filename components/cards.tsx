@@ -8,10 +8,10 @@ import {formatCount, formatDuration, watchHref } from '@/lib/format';
 import type { ChannelLite, Video } from '@/lib/types';
 import { Ago } from './ago';
 import { useApp } from './app-context';
-import { Avatar, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
+import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
 
 export function VerifiedBadge() {
-  return <Icon name="check_circle" filled size={14} className="verified" />;
+  return <CheckCircleIcon size={14} className="verified" />;
 }
 
 export function ChannelName({ channel, className = '' }: { channel: ChannelLite; className?: string }) {
@@ -70,7 +70,7 @@ export function Thumbnail({ v, preview = true, actions = true }: { v: Video; pre
         <video className="thumb-preview" src={v.src} muted playsInline autoPlay loop preload="auto"
           onPlaying={() => setPlaying(true)} onLoadedMetadata={(e) => { if (v.progress) e.currentTarget.currentTime = v.progress; }} />
       )}
-      {v.type !== 'short' && <span className="duration">{formatDuration(v.duration)}</span>}
+      {v.live ? <span className="thumb-live">LIVE</span> : v.type !== 'short' && <span className="duration">{formatDuration(v.duration)}</span>}
       {pct > 1 && <span className="resume"><span style={{ width: `${pct}%` }} /></span>}
       {actions && v.type !== 'short' && (
         <span className="thumb-actions">
@@ -113,7 +113,7 @@ export function VideoMenuButton({ v, extra = [], className = '' }: { v: Video; e
       : [
         { icon: 'block', label: 'Not interested', onSelect: () => hideIt('video') },
         { icon: 'do_not_disturb_on', label: 'Don’t recommend channel', onSelect: () => hideIt('channel') },
-        { icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'video' }) },
+        { icon: 'flag', label: 'Report', onSelect: () => app.open({ kind: 'report', what: 'video', targetId: v.id }) },
       ]),
   ];
   return (

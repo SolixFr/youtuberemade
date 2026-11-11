@@ -10,6 +10,29 @@ export const runtime = 'nodejs';
 
 const notFound = () => new Response('Not found', { status: 404 });
 
+/** File stream that survives client disconnects: every controller write is guarded,
+    so an aborted/seeking player can never throw "controller is already closed". */
+function streamFile(node: Readable, signal: AbortSignal): ReadableStream {
+  let closed = false;
+  const stop = () => { closed = true; node.destroy(); };
+  node.on('close', () => { closed = true; });
+  node.on('error', stop);
+  if (signal.aborted) stop();
+  else signal.addEventListener('abort', stop, { once: true });
+  return new ReadableStream({
+    start(controller) {
+      node.on('data', (chunk: Buffer) => {
+        if (closed) return;
+        try { controller.enqueue(new Uint8Array(chunk)); } catch { stop(); return; }
+        if (controller.desiredSize !== null && controller.desiredSize <= 0) node.pause();
+      });
+      node.once('end', () => { closed = true; try { controller.close(); } catch { /* already closed */ } });
+    },
+    pull() { if (!closed) node.resume(); },
+    cancel() { stop(); },
+  });
+}
+
 /** Serves uploaded files with Range support (needed for video seeking) and visibility checks. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -49,8 +72,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if ((from === '' && to === '') || start > end || start >= size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
     headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
     headers.set('Content-Length', String(end - start + 1));
-    return new Response(Readable.toWeb(createReadStream(path, { start, end })) as ReadableStream, { status: 206, headers });
+    return new Response(streamFile(createReadStream(path, { start, end }), req.signal), { status: 206, headers });
   }
   headers.set('Content-Length', String(size));
-  return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, { status: 200, headers });
+  return new Response(streamFile(createReadStream(path), req.signal), { status: 200, headers });
 }

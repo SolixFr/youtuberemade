@@ -9,7 +9,7 @@ import { formatDuration, parseChapters } from '@/lib/format';
 import type { Visibility } from '@/lib/types';
 import { uploadFile, type UploadHandle } from '@/lib/upload-client';
 import { useApp } from './app-context';
-import { Avatar, Button, Dialog, Field, Icon, IconButton, useToast } from './ui';
+import { Avatar, Button, CheckCircleIcon, Dialog, Field, Icon, IconButton, useToast } from './ui';
 
 export const TOPICS = ['Education', 'Science & Technology', 'People & Blogs', 'Film & Animation', 'Music', 'Gaming', 'Travel & Events', 'Earth', 'The Sun', 'Rockets', 'Telescopes & Mars'];
 const MAX_VIDEO = 1024 * 1024 * 1024;
@@ -173,7 +173,7 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
       footer={(close) => (
         <>
           <div className="upload-status">
-            <span className={upload?.status === 'error' ? 'error' : ''}><Icon name={upload?.status === 'done' ? 'check_circle' : upload?.status === 'error' ? 'error' : 'cloud_upload'} size={20} />{status}</span>
+            <span className={upload?.status === 'error' ? 'error' : ''}>{upload?.status === 'done' ? <CheckCircleIcon size={20} /> : <Icon name={upload?.status === 'error' ? 'error' : 'cloud_upload'} size={20} />}{status}</span>
             <span className="progress"><i style={{ transform: `scaleX(${pct / 100})` }} /></span>
           </div>
           <Button variant="text" onClick={() => { handle.current?.abort(); close(); }}>Cancel</Button>

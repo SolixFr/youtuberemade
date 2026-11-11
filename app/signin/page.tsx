@@ -9,6 +9,6 @@ const safeNext = (next?: string) => (next && next.startsWith('/') && !next.start
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string; mode?: string }> }) {
   const { next, mode } = await searchParams;
-  if (await getMe()) redirect(safeNext(next));
+  if (await getMe() && mode !== 'signup') redirect(safeNext(next));
   return <SignInForm next={safeNext(next)} initialMode={mode === 'signup' ? 'signup' : 'signin'} />;
 }

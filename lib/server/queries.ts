@@ -8,11 +8,12 @@ import type {
 } from '@/lib/types';
 
 export const STORY_TTL = 7 * 86_400_000;
+const DAY = 86_400_000;
 export const STORY_MIN_SUBS = 10_000;
 const NOBODY = '';
 
 /* ---------------- rows ---------------- */
-interface UserRow { id: string; handle: string; name: string; avatar: string | null; verified: number; subscribers: number; description: string; banner: string | null; links: string; created_at: number; password_hash: string | null }
+interface UserRow { id: string; handle: string; name: string; avatar: string | null; verified: number; subscribers: number; description: string; banner: string | null; links: string; pronouns: string; created_at: number; password_hash: string | null }
 interface VideoRow {
   id: string; channel_id: string; type: 'video' | 'short'; title: string; description: string; duration: number; views: number; likes: number;
   published_at: number; src: string; thumbnail: string; captions: string | null; visibility: Visibility; topic: string;
@@ -29,16 +30,43 @@ const storyStates = cache((viewer: string): Map<string, StoryState> => {
   return new Map(rows.map((r) => [r.channel_id, r.all_seen ? 'seen' : 'unseen']));
 });
 
+export function membershipState(viewer: string | null | undefined, channelId: string) {
+  if (!viewer) return null;
+  const r = sql(`SELECT m.tier, t.name, t.price_cents, m.started_at FROM memberships m JOIN channel_tiers t ON t.channel_id = m.channel_id AND t.tier = m.tier WHERE m.user_id = ? AND m.channel_id = ?`).get(viewer, channelId) as { tier: number; name: string; price_cents: number; started_at: number } | undefined;
+  return r ?? null;
+}
+
+/** True if the viewer may read members-only content published to this channel (owner or member). */
+export function canSeeMembersOnly(viewerId: string | null | undefined, channelId: string): boolean {
+  if (viewerId && viewerId === channelId) return true;
+  return viewerId != null && !!membershipOf(viewerId, channelId);
+}
+
+export function channelTiers(channelId: string) {
+  return (sql('SELECT tier, price_cents, name, perks FROM channel_tiers WHERE channel_id = ? ORDER BY tier').all(channelId) as { tier: number; price_cents: number; name: string; perks: string }[])
+    .map((t) => ({ ...t, perks: JSON.parse(t.perks) as string[] }));
+}
+
+/** How many active members this channel has. */
+export function memberCount(channelId: string): number {
+  return (sql('SELECT COUNT(*) n FROM memberships WHERE channel_id = ?').get(channelId) as { n: number }).n;
+}
+
+/** Member badge the viewer holds on a channel; null for non-members. */
+const membershipOf = cache((viewer: string | null | undefined, channelId: string) => viewer == null ? null : (sql(`SELECT m.tier, t.name FROM memberships m JOIN channel_tiers t ON t.channel_id = m.channel_id AND t.tier = m.tier WHERE m.user_id = ? AND m.channel_id = ?`).get(viewer, channelId) as { tier: number; name: string } | undefined) ?? null);
+
 function lite(viewer: string, r: { id: string; handle: string; name: string; avatar: string | null; verified: number; subscribers: number }): ChannelLite {
-  return { id: r.id, handle: r.handle, name: r.name, avatar: r.avatar, verified: !!r.verified, subscribers: r.subscribers, story: storyStates(viewer).get(r.id) ?? null };
+  // Channels reach 50,000 subscribers earn the checkmark automatically.
+  return { id: r.id, handle: r.handle, name: r.name, avatar: r.avatar, verified: !!r.verified || r.subscribers >= 50_000, subscribers: r.subscribers, story: storyStates(viewer).get(r.id) ?? null, membership: membershipOf(viewer, r.id) };
 }
 
 function toVideo(viewer: string, r: VideoRow): Video {
+  const live = !!sql('SELECT 1 FROM live_sessions WHERE ended_at IS NULL AND video_id = ?').get(r.id);
   return {
     id: r.id, type: r.type, title: r.title, description: r.description, duration: r.duration, views: r.views, likes: r.likes,
     publishedAt: r.published_at, src: r.src, thumbnail: r.thumbnail, captions: r.captions, visibility: r.visibility, topic: r.topic,
     credit: r.credit_label && r.credit_url ? { label: r.credit_label, url: r.credit_url } : null, recordedLive: !!r.recorded_live,
-    progress: r.progress ?? 0,
+    progress: r.progress ?? 0, live,
     channel: lite(viewer, { id: r.channel_id, handle: r.c_handle, name: r.c_name, avatar: r.c_avatar, verified: r.c_verified, subscribers: r.c_subs }),
   };
 }
@@ -139,7 +167,7 @@ export function suggestions(q: string, viewer?: string | null): string[] {
 
 /* ---------------- channels ---------------- */
 function toChannel(viewer: string, r: UserRow): Channel {
-  return { ...lite(viewer, r), description: r.description, banner: r.banner, links: JSON.parse(r.links), joinedAt: r.created_at, hasAccount: !!r.password_hash };
+  return { ...lite(viewer, r), description: r.description, banner: r.banner, links: JSON.parse(r.links), pronouns: r.pronouns, joinedAt: r.created_at, hasAccount: !!r.password_hash };
 }
 
 export function channelByHandle(handle: string, viewer?: string | null): Channel | null {
@@ -170,16 +198,19 @@ export function subscriptionState(viewer: string | null | undefined, channelId: 
 }
 
 /* ---------------- comments ---------------- */
-interface CommentRow { id: string; video_id: string; parent_id: string | null; author_id: string | null; author_name: string | null; text: string; likes: number; pinned: number; hearted: number; edited: number; created_at: number; a_handle: string | null; a_name: string | null; a_avatar: string | null; a_verified: number | null; owner: string; my_vote: number | null }
+interface CommentRow { id: string; video_id: string; parent_id: string | null; author_id: string | null; author_name: string | null; text: string; likes: number; pinned: number; hearted: number; edited: number; created_at: number; a_handle: string | null; a_name: string | null; a_avatar: string | null; a_verified: number | null; owner: string; my_vote: number | null; member_tier: number | null; member_name: string | null }
 export function comments(videoId: string, viewer?: string | null): Comment[] {
-  const rows = sql(`SELECT c.*, a.handle a_handle, a.name a_name, a.avatar a_avatar, a.verified a_verified, v.channel_id owner, cv.value my_vote
+  const rows = sql(`SELECT c.*, a.handle a_handle, a.name a_name, a.avatar a_avatar, a.verified a_verified, v.channel_id owner, cv.value my_vote,
+      m.tier member_tier, t.name member_name
     FROM comments c JOIN videos v ON v.id = c.video_id
     LEFT JOIN users a ON a.id = c.author_id
     LEFT JOIN comment_votes cv ON cv.comment_id = c.id AND cv.user_id = @viewer
+    LEFT JOIN memberships m ON m.user_id = c.author_id AND m.channel_id = v.channel_id
+    LEFT JOIN channel_tiers t ON t.channel_id = m.channel_id AND t.tier = m.tier
     WHERE c.video_id = @video ORDER BY c.created_at`).all({ video: videoId, viewer: vid(viewer) }) as CommentRow[];
   return rows.map((r) => ({
     id: r.id, videoId: r.video_id, parentId: r.parent_id,
-    author: { id: r.author_id, name: r.a_name ?? r.author_name ?? 'Unknown', handle: r.a_handle ?? r.author_name ?? '@unknown', avatar: r.a_avatar, verified: !!r.a_verified },
+    author: { id: r.author_id, name: r.a_name ?? r.author_name ?? 'Unknown', handle: r.a_handle ?? r.author_name ?? '@unknown', avatar: r.a_avatar, verified: !!r.a_verified, membership: r.member_tier ? { tier: r.member_tier, name: r.member_name ?? 'Supporter' } : null },
     byCreator: r.author_id === r.owner, mine: !!viewer && r.author_id === viewer,
     text: r.text, likes: r.likes, myVote: (r.my_vote ?? 0) as -1 | 0 | 1, pinned: !!r.pinned, hearted: !!r.hearted, edited: !!r.edited, createdAt: r.created_at,
   }));
@@ -190,7 +221,7 @@ export function commentCount(videoId: string): number {
 }
 
 /* ---------------- posts ---------------- */
-interface PostRow { id: string; channel_id: string; text: string; image: string | null; video_id: string | null; likes: number; created_at: number; handle: string; name: string; avatar: string | null; verified: number; subscribers: number; liked: number; my_vote: number | null; n_comments: number }
+interface PostRow { id: string; channel_id: string; text: string; image: string | null; video_id: string | null; members_only: number; likes: number; created_at: number; handle: string; name: string; avatar: string | null; verified: number; subscribers: number; liked: number; my_vote: number | null; n_comments: number }
 export function posts(viewer: string | null | undefined, filter: { channel?: string; channels?: string[]; id?: string; q?: string; limit?: number }): Post[] {
   const where: string[] = [];
   const params: Record<string, unknown> = { viewer: vid(viewer), limit: filter.limit ?? 50 };
@@ -205,19 +236,31 @@ export function posts(viewer: string | null | undefined, filter: { channel?: str
     FROM posts p JOIN users u ON u.id = p.channel_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY p.created_at DESC LIMIT @limit`).all(params) as PostRow[];
   return rows.map((r) => {
+    // Members-only posts are redacted for anyone who isn't the owner or a member.
+    if (r.members_only && !canSeeMembersOnly(viewer, r.channel_id)) {
+      return {
+        id: r.id, channel: lite(vid(viewer), { id: r.channel_id, handle: r.handle, name: r.name, avatar: r.avatar, verified: r.verified, subscribers: r.subscribers }),
+        text: '', image: null, video: null, poll: null, myVote: null, likes: r.likes, liked: false, comments: r.n_comments,
+        createdAt: r.created_at, membersOnly: true, locked: true,
+      };
+    }
     const poll = sql('SELECT text, votes FROM poll_options WHERE post_id = ? ORDER BY idx').all(r.id) as { text: string; votes: number }[];
     return {
       id: r.id, channel: lite(vid(viewer), { id: r.channel_id, handle: r.handle, name: r.name, avatar: r.avatar, verified: r.verified, subscribers: r.subscribers }),
       text: r.text, image: r.image, video: r.video_id ? getVideo(r.video_id, viewer) : null, poll: poll.length ? poll : null,
-      myVote: r.my_vote, likes: r.likes, liked: !!r.liked, comments: r.n_comments, createdAt: r.created_at,
+      myVote: r.my_vote, likes: r.likes, liked: !!r.liked, comments: r.n_comments, createdAt: r.created_at, membersOnly: !!r.members_only,
     };
   });
 }
 
 export function postComments(postId: string, viewer?: string | null): PostComment[] {
-  return (sql(`SELECT pc.id, pc.text, pc.created_at, pc.author_id, u.name, u.handle, u.avatar FROM post_comments pc JOIN users u ON u.id = pc.author_id
-    WHERE pc.post_id = ? ORDER BY pc.created_at DESC`).all(postId) as { id: string; text: string; created_at: number; author_id: string; name: string; handle: string; avatar: string | null }[])
-    .map((r) => ({ id: r.id, text: r.text, createdAt: r.created_at, mine: r.author_id === viewer, author: { name: r.name, handle: r.handle, avatar: r.avatar } }));
+  return (sql(`SELECT pc.id, pc.text, pc.created_at, pc.author_id, p.channel_id, p.members_only, u.name, u.handle, u.avatar, m.tier member_tier, t.name member_name
+    FROM post_comments pc JOIN posts p ON p.id = pc.post_id JOIN users u ON u.id = pc.author_id
+    LEFT JOIN memberships m ON m.user_id = pc.author_id AND m.channel_id = p.channel_id
+    LEFT JOIN channel_tiers t ON t.channel_id = m.channel_id AND t.tier = m.tier
+    WHERE pc.post_id = ? ORDER BY pc.created_at DESC`).all(postId) as { id: string; text: string; created_at: number; author_id: string; channel_id: string; members_only: number; name: string; handle: string; avatar: string | null; member_tier: number | null; member_name: string | null }[])
+    .filter((r) => !r.members_only || canSeeMembersOnly(viewer, r.channel_id))
+    .map((r) => ({ id: r.id, text: r.text, createdAt: r.created_at, mine: r.author_id === viewer, author: { name: r.name, handle: r.handle, avatar: r.avatar, membership: r.member_tier ? { tier: r.member_tier, name: r.member_name ?? 'Supporter' } : null } }));
 }
 
 /* ---------------- stories ---------------- */
@@ -231,7 +274,7 @@ export function storyGroups(viewer: string | null | undefined, channelIds?: stri
     LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.user_id = @viewer
     LEFT JOIN videos v ON v.id = s.video_id
     WHERE s.created_at > @since AND u.subscribers >= @min ${filter} ORDER BY s.created_at`).all(params) as {
-      id: string; channel_id: string; image: string | null; background: string; text: string; text_color: string; video_id: string | null; created_at: number;
+      id: string; channel_id: string; image: string | null; background: string; text: string; text_color: string; text_pos: string | null; views: number; likes: number; video_id: string | null; created_at: number;
       handle: string; name: string; avatar: string | null; verified: number; subscribers: number; seen: string | null; liked: number | null;
       v_title: string | null; v_type: 'video' | 'short' | null; v_vis: string | null; v_pub: number | null;
     }[];
@@ -239,7 +282,7 @@ export function storyGroups(viewer: string | null | undefined, channelIds?: stri
   for (const r of rows) {
     const g = groups.get(r.channel_id) ?? { channel: lite(vid(viewer), { id: r.channel_id, handle: r.handle, name: r.name, avatar: r.avatar, verified: r.verified, subscribers: r.subscribers }), slides: [] };
     const linkOk = r.video_id && r.v_vis === 'public' && (r.v_pub ?? 0) <= Date.now();
-    g.slides.push({ id: r.id, image: r.image, background: r.background, text: r.text, textColor: r.text_color, createdAt: r.created_at, seen: !!r.seen, liked: !!r.liked,
+    g.slides.push({ id: r.id, image: r.image, background: r.background, text: r.text, textColor: r.text_color, textPos: r.text_pos ?? 'middle-center', views: r.views, likes: r.likes, createdAt: r.created_at, seen: !!r.seen, liked: !!r.liked,
       video: linkOk ? { id: r.video_id!, title: r.v_title!, type: r.v_type! } : null });
     groups.set(r.channel_id, g);
   }
@@ -293,7 +336,10 @@ export function playlistMembership(viewer: string, videoId: string) {
   return { watchLater: wl, lists: lists.map((l) => ({ ...l, has: !!l.has })) };
 }
 
-/* ---------------- notifications (derived from subscriptions) ---------------- */
+/* ---------------- notifications ----------------
+   Subscribers hear about your uploads/posts/stories; you hear about new
+   subscribers and comments on your videos. All state (read/dismissed) is
+   derived against the stable per-item key. */
 export function notifications(viewer: string): Notification[] {
   const since = Date.now() - 30 * 86_400_000;
   const state = new Map((sql('SELECT key, dismissed FROM notification_state WHERE user_id = ?').all(viewer) as { key: string; dismissed: number }[]).map((r) => [r.key, r.dismissed]));
@@ -302,21 +348,139 @@ export function notifications(viewer: string): Notification[] {
   const vids = sql(`${VIDEO_SELECT} WHERE ${FEED_WHERE} AND v.channel_id IN (${subs}) AND v.published_at > @since ORDER BY v.published_at DESC LIMIT 30`).all({ viewer, now: Date.now(), since }) as VideoRow[];
   for (const r of vids) {
     const v = toVideo(viewer, r);
-    out.push({ key: `v:${v.id}`, channel: v.channel, text: `${v.channel.name} uploaded: ${v.title}`, href: v.type === 'short' ? `/shorts/${v.id}` : `/watch?v=${v.id}`, thumbnail: v.thumbnail, at: v.publishedAt, read: false });
+    out.push({ key: `v:${v.id}`, kind: 'upload', channel: v.channel, text: `${v.channel.name} uploaded: ${v.title}`, href: v.type === 'short' ? `/shorts/${v.id}` : `/watch?v=${v.id}`, thumbnail: v.thumbnail, at: v.publishedAt, read: false });
   }
   for (const p of posts(viewer, { limit: 20 }).filter((p) => p.createdAt > since)) {
     const subscribed = sql(`SELECT 1 FROM subscriptions WHERE user_id = ? AND channel_id = ? AND bell != 'none'`).get(viewer, p.channel.id);
-    if (subscribed) out.push({ key: `p:${p.id}`, channel: p.channel, text: `${p.channel.name} posted: ${p.text.slice(0, 90)}${p.text.length > 90 ? '…' : ''}`, href: `/post/${p.id}`, thumbnail: p.image, at: p.createdAt, read: false });
+    if (subscribed) out.push({ key: `p:${p.id}`, kind: 'post', channel: p.channel, text: `${p.channel.name} posted: ${p.text.slice(0, 90)}${p.text.length > 90 ? '…' : ''}`, href: `/post/${p.id}`, thumbnail: p.image, at: p.createdAt, read: false });
   }
   const subIds = (sql(`SELECT channel_id FROM subscriptions WHERE user_id = ? AND bell != 'none'`).all(viewer) as { channel_id: string }[]).map((r) => r.channel_id);
   for (const g of storyGroups(viewer, subIds)) {
     const last = g.slides[g.slides.length - 1];
-    out.push({ key: `s:${last.id}`, channel: g.channel, text: `${g.channel.name} added to their story`, href: `story:${g.channel.id}`, thumbnail: last.image, at: last.createdAt, read: false });
+    out.push({ key: `s:${last.id}`, kind: 'story', channel: g.channel, text: `${g.channel.name} added to their story`, href: `story:${g.channel.id}`, thumbnail: last.image, at: last.createdAt, read: false });
+  }
+  // Activity on your own channel: new subscribers.
+  const newSubs = sql(`SELECT u.id, u.handle, u.name, u.avatar, u.verified, u.subscribers, s.created_at at
+    FROM subscriptions s JOIN users u ON u.id = s.user_id
+    WHERE s.channel_id = @viewer AND s.created_at > @since ORDER BY s.created_at DESC LIMIT 20`).all({ viewer, since }) as { id: string; handle: string; name: string; avatar: string | null; verified: number; subscribers: number; at: number }[];
+  for (const u of newSubs) {
+    out.push({ key: `sub:${u.id}`, kind: 'sub', channel: lite(viewer, u), text: `${u.name} subscribed to your channel.`, href: `/${u.handle}`, thumbnail: null, at: u.at, read: false });
+  }
+  // …and comments (including simulated viewers) on your videos.
+  const myComments = sql(`SELECT c.id, c.author_id, c.author_name, c.text, c.created_at at, c.video_id, v.title v_title, v.thumbnail v_thumb,
+      cu.handle a_handle, cu.name a_name, cu.avatar a_avatar
+    FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN users cu ON cu.id = c.author_id
+    WHERE v.channel_id = @viewer AND (c.author_id IS NULL OR c.author_id != @viewer) AND c.created_at > @since
+    ORDER BY c.created_at DESC LIMIT 20`).all({ viewer, since }) as { id: string; author_id: string | null; author_name: string | null; text: string; at: number; video_id: string; v_title: string; v_thumb: string; a_handle: string | null; a_name: string | null; a_avatar: string | null }[];
+  for (const c of myComments) {
+    const name = c.a_name ?? c.author_name ?? 'Someone';
+    const handle = c.a_handle ?? c.author_name ?? '';
+    const ch = lite(viewer, { id: c.author_id ?? c.id, handle, name, avatar: c.a_avatar, verified: 0, subscribers: 0 });
+    out.push({ key: `c:${c.id}`, kind: 'comment', channel: ch, text: `${name} commented on “${c.v_title}”: ${c.text.slice(0, 80)}${c.text.length > 80 ? '…' : ''}`, href: `/watch?v=${c.video_id}`, thumbnail: c.v_thumb, at: c.at, read: false });
   }
   return out.filter((n) => state.get(n.key) !== 1).map((n) => ({ ...n, read: state.has(n.key) })).sort((a, b) => b.at - a.at);
 }
 
+/* ---------------- live ---------------- */
+/** The channel's currently-running live session (with its waiting video), if any. */
+export function activeLive(channelId: string) {
+  return sql('SELECT id, video_id, title, started_at, viewers, views FROM live_sessions WHERE channel_id = ? AND ended_at IS NULL').get(channelId) as { id: string; video_id: string | null; title: string; started_at: number; viewers: number; views: number } | undefined;
+}
+
+/** The open live session for a specific video, if any (waiting room route — watch page replaces the player). */
+export function liveSessionForVideo(videoId: string) {
+  return sql('SELECT id, channel_id, ended_at, title, views, viewers FROM live_sessions WHERE video_id = ? AND ended_at IS NULL').get(videoId) as { id: string; channel_id: string; ended_at: number | null; title: string; views: number; viewers: number } | undefined;
+}
+
+/* ---------------- channel customization ---------------- */
+const SECTION_KINDS = ['recent_uploads', 'popular_uploads', 'shorts', 'playlists', 'posts', 'members'] as const;
+export type SectionKind = (typeof SECTION_KINDS)[number] | `playlist:${string}`;
+const DEFAULT_SECTIONS: SectionKind[] = ['recent_uploads', 'shorts', 'playlists', 'posts'];
+const MAX_SECTIONS = 12;
+const playlistToken = /^playlist:[\w-]{6,64}$/;
+
+export interface ChannelConfig {
+  contactEmail: string;
+  trailerVideoId: string | null;
+  featuredVideoId: string | null;
+  watermark: string | null;
+  watermarkDisplay: 'end' | 'custom' | 'full';
+  watermarkStart: number;
+  homeSections: SectionKind[];
+}
+
+export function sanitizeSections(input: unknown): SectionKind[] {
+  if (!Array.isArray(input)) return DEFAULT_SECTIONS;
+  const allowed = new Set<string>(SECTION_KINDS);
+  const seen = new Set<string>();
+  const out: SectionKind[] = [];
+  for (const k of input) {
+    if (typeof k !== 'string' || seen.has(k)) continue;
+    if (allowed.has(k) || playlistToken.test(k)) { seen.add(k); out.push(k as SectionKind); }
+    if (out.length >= MAX_SECTIONS) break;
+  }
+  return out;
+}
+
+/** The Layout/Branding/Basic info settings, for the Customization page and the homepage renderer. */
+export function channelConfig(channelId: string): ChannelConfig {
+  const r = sql('SELECT contact_email, trailer_video_id, featured_video_id, watermark, watermark_display, watermark_start, home_sections FROM users WHERE id = ?').get(channelId) as { contact_email: string; trailer_video_id: string | null; featured_video_id: string | null; watermark: string | null; watermark_display: string; watermark_start: number; home_sections: string | null };
+  let homeSections: SectionKind[] = DEFAULT_SECTIONS;
+  if (r.home_sections !== null) {
+    try { homeSections = sanitizeSections(JSON.parse(r.home_sections)); } catch { /* keep defaults */ }
+  }
+  const wd = r.watermark_display === 'full' ? 'full' : r.watermark_display === 'custom' ? 'custom' : 'end';
+  return { contactEmail: r.contact_email, trailerVideoId: r.trailer_video_id, featuredVideoId: r.featured_video_id, watermark: r.watermark, watermarkDisplay: wd, watermarkStart: Math.max(1, Math.min(3600, Math.floor(r.watermark_start) || 8)), homeSections };
+}
+
+/** A few member avatars for the Member recognition shelf (shown only with 8+ members). */
+export function activeMembers(channelId: string, limit = 24) {
+  return sql(`SELECT u.id, u.handle, u.name, u.avatar FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ? ORDER BY RANDOM() LIMIT ?`).all(channelId, limit) as { id: string; handle: string; name: string; avatar: string | null }[];
+}
+
+/** The video watermark shown on a channel's videos, if set. */
+export function watermarkOf(channelId: string): { src: string; display: 'end' | 'custom' | 'full'; start: number; channelName: string; handle: string } | null {
+  const r = sql('SELECT watermark, watermark_display, watermark_start, name, handle FROM users WHERE id = ?').get(channelId) as { watermark: string | null; watermark_display: string; watermark_start: number; name: string; handle: string };
+  if (!r.watermark) return null;
+  const wd = r.watermark_display === 'full' ? 'full' : r.watermark_display === 'custom' ? 'custom' : 'end';
+  return { src: r.watermark, display: wd, start: Math.max(1, Math.min(3600, Math.floor(r.watermark_start) || 8)), channelName: r.name, handle: r.handle };
+}
+
 /* ---------------- studio ---------------- */
+export interface Monetization {
+  subscribers: number;
+  watchHours: number;
+  shortsViews: number;
+  uploads: number;
+  memberships: boolean;
+  partner: boolean;
+  verified: boolean;
+  shop: boolean;
+  earnings: number;
+}
+
+/** Creator-program thresholds tuned for a reasonable pace:
+    memberships at 500 subs + 3 recent uploads + 100 watch hours;
+    partner at 1,000 subs + (250 watch hours or 250K shorts views);
+    verified + shop at 50,000 subs. */
+export function monetization(channelId: string): Monetization {
+  const r = sql('SELECT subscribers, watch_seconds, earnings FROM users WHERE id = ?').get(channelId) as { subscribers: number; watch_seconds: number; earnings: number };
+  const shortsViews = (sql(`SELECT COALESCE(SUM(views), 0) n FROM videos WHERE channel_id = ? AND type = 'short'`).get(channelId) as { n: number }).n;
+  const uploads = (sql(`SELECT COUNT(*) n FROM videos WHERE channel_id = ? AND visibility = 'public' AND published_at > ?`).get(channelId, Date.now() - 90 * DAY) as { n: number }).n;
+  const watchHours = r.watch_seconds / 3600;
+  return {
+    subscribers: r.subscribers,
+    watchHours,
+    shortsViews,
+    uploads,
+    memberships: r.subscribers >= 500 && uploads >= 3 && watchHours >= 100,
+    partner: r.subscribers >= 1000 && (watchHours >= 250 || shortsViews >= 250_000),
+    verified: !!r.subscribers && r.subscribers >= 50_000,
+    shop: r.subscribers >= 50_000,
+    earnings: r.earnings,
+  };
+}
+
 export function analytics(channelId: string, days = 28) {
   const since = Date.now() - days * 86_400_000;
   const events = sql(`SELECT e.video_id, e.at, e.seconds FROM view_events e JOIN videos v ON v.id = e.video_id WHERE v.channel_id = ? AND e.at > ?`).all(channelId, since) as { video_id: string; at: number; seconds: number }[];

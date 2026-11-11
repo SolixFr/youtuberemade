@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { submitReport } from '@/lib/actions/admin';
 import { createPlaylist, getPlaylistMembership, setInPlaylist } from '@/lib/actions/videos';
 import { formatDuration } from '@/lib/format';
 import type { Visibility } from '@/lib/types';
@@ -92,19 +93,26 @@ function SaveDialog({ videoId, onClose }: { videoId: string; onClose: () => void
 }
 
 const REPORT_REASONS = ['Sexual content', 'Violent or repulsive content', 'Hateful or abusive content', 'Harassment or bullying', 'Harmful or dangerous acts', 'Misinformation', 'Spam or misleading', 'Legal issue'];
-function ReportDialog({ what, onClose }: { what: string; onClose: () => void }) {
+function ReportDialog({ what, targetId, onClose }: { what: string; targetId: string; onClose: () => void }) {
+  const toast = useToast();
   const [reason, setReason] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const submit = async (close: () => void) => {
+    if (!reason) return;
+    const r = await submitReport(what as 'video' | 'comment' | 'channel', targetId, reason);
+    if (!r.ok) return toast(r.error);
+    setSent(true);
+  };
   if (sent) {
     return (
       <Dialog title="Report received" onClose={onClose} width={420} footer={(close) => <Button variant="text" className="text-blue" onClick={close}>Close</Button>}>
-        <p className="muted">There’s no moderation team behind this demo, so reports aren’t reviewed. In a production deployment this is where they would be queued.</p>
+        <p className="muted">Thanks — an admin will review it. Reports are queued in the admin panel.</p>
       </Dialog>
     );
   }
   return (
     <Dialog title={`Report ${what}`} onClose={onClose} width={420}
-      footer={(close) => <><Button variant="text" onClick={close}>Cancel</Button><Button variant="text" className="text-blue" disabled={!reason} onClick={() => setSent(true)}>Report</Button></>}>
+      footer={(close) => <><Button variant="text" onClick={close}>Cancel</Button><Button variant="text" className="text-blue" disabled={!reason} onClick={() => submit(close)}>Report</Button></>}>
       {REPORT_REASONS.map((r) => <label key={r} className="check-row"><input type="radio" name="reason" checked={reason === r} onChange={() => setReason(r)} />{r}</label>)}
     </Dialog>
   );
@@ -158,7 +166,7 @@ export function GlobalDialogs({ dialog }: { dialog: DialogState }) {
   switch (dialog.kind) {
     case 'share': return <ShareDialog {...dialog} onClose={close} />;
     case 'save': return <SaveDialog videoId={dialog.videoId} onClose={close} />;
-    case 'report': return <ReportDialog what={dialog.what} onClose={close} />;
+    case 'report': return <ReportDialog what={dialog.what} targetId={dialog.targetId} onClose={close} />;
     case 'shortcuts': return <ShortcutsDialog onClose={close} />;
     case 'clip': return <ClipDialog {...dialog} onClose={close} />;
     case 'signin': return <SignInDialog reason={dialog.reason} onClose={close} />;
