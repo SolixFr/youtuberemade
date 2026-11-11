@@ -88,13 +88,17 @@ function tick() {
     velocity += (v.subs / 350_000) * decay * Math.random() * ageCut;
     if (v.subs < 1000) velocity += 3 * decay * ageCut;
 
-    // Viral window: rare and sharp, then the video quiets down for good.
+    // Viral window: quality Shorts catch far more often (and harder) than anything else —
+    // that's the whole point of the format. Long videos pop rarely and age out.
     const boost = boosts.get(v.id);
     if (boost) {
       if (boost.until > now) velocity *= boost.mult;
       else boosts.delete(v.id);
     }
-    if (!boost && chance(0.004) && ageHours < 240) boosts.set(v.id, { until: now + rand(3, 8) * 60_000, mult: rand(5, 14) });
+    const boostChance = short ? 0.006 + q * 0.022 : 0.004 + q * 0.004;
+    if (!boost && chance(boostChance) && ageHours < 240) {
+      boosts.set(v.id, { until: now + rand(4, 10) * 60_000, mult: short ? rand(6, 16) : rand(5, 14) });
+    }
 
     const views = Math.round(velocity);
     if (views <= 0 && batch <= 0) continue;
