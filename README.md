@@ -110,11 +110,21 @@ VIDORA_VERIFY_BUILD=1 npm run build   # throwaway build into .next-verify/
 
 ## Deployment (Vercel)
 
-1. Push this directory to GitHub (main branch).
-2. Import the repo in Vercel — no extra configuration needed; Next.js is auto-detected.
-3. The deployed app stores its SQLite database in `/tmp/vidora-data` (autodetected), which is
-   **ephemeral** — perfect for a demo, not for persistence. For persistent storage, point
-   `VIDORA_DATA_DIR` at a mounted volume or migrate these queries to a hosted database.
+This repo is wired to [youtuberemade.vercel.app](https://youtuberemade.vercel.app) via Vercel's
+Git integration — **every push to `main` redeploys automatically**, no action needed.
+
+The app runs there (SQLite falls back to `/tmp/vidora-data`), with one **hard** caveat:
+Vercel serverless lambdas have an ephemeral `/tmp` filesystem. On every cold start the app
+creates an empty database and seeds the demo catalogue. Consequently:
+
+- **Browsing the demo catalogue works, every time.**
+- **Sign-ups, uploads, comments, live sessions and anything else you create do not persist**
+  across cold starts, and different instances may see different state.
+- For real persistence you need a shared database (Turso, Neon, etc.). Locally you can keep
+  using `VIDORA_DATA_DIR=/path/to/data`; on Vercel there is no persistent writable volume,
+  so queries would have to move to that provider.
+
+Do not upload anything you care about to the Vercel demo — it will vanish.
 
 ## Project structure
 
