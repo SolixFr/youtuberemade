@@ -11,7 +11,7 @@ import { computeGuideMode, type GuideMode } from '@/lib/guide-mode';
 import { Ago } from './ago';
 import { formatCount } from '@/lib/format';
 import { useApp } from './app-context';
-import { Avatar, Dialog, Icon, IconButton, Menu, ShortsIcon, Spinner, useIsMobile, useToast, useWindowWidth, type MenuItem } from './ui';
+import { Avatar, Dialog, Icon, IconButton, Menu, ShortsIcon, Spinner, useToast, useWindowWidth, type MenuItem } from './ui';
 
 export type { GuideMode };
 
@@ -357,16 +357,16 @@ export function Masthead({ badges: initialBadges }: { badges: { notifications: n
       <div className="mh-center"><SearchBox key={query} initial={query} /></div>
       <div className="mh-end">
         <IconButton icon="search" label="Search" className="mobile-only" onClick={() => setMobileSearch(true)} />
-        <button type="button" className="btn btn-tonal btn-md create-btn desktop-only" {...toggleMenu('create')}>
+        <button type="button" className="btn btn-tonal btn-md create-btn" {...toggleMenu('create')}>
           <Icon name="add" /><span className="btn-label">Create</span>
         </button>
         {app.me ? (
           <>
-            <Link href="/messages" className="icon-btn badge-btn" aria-label="Messages" data-tooltip="Messages"><Icon name="chat" />{badge(badges.messages)}</Link>
-            <button type="button" className="icon-btn badge-btn" aria-label="Notifications" data-tooltip="Notifications" {...toggleMenu('notif')}>
+            <Link href="/messages" className="icon-btn badge-btn desktop-only" aria-label="Messages" data-tooltip="Messages"><Icon name="chat" />{badge(badges.messages)}</Link>
+            <button type="button" className="icon-btn badge-btn desktop-only" aria-label="Notifications" data-tooltip="Notifications" {...toggleMenu('notif')}>
               <Icon name="notifications" />{badge(badges.notifications)}
             </button>
-            <button type="button" className="avatar-btn desktop-only" aria-label="Account menu" aria-expanded={menu?.kind === 'account'} {...toggleMenu('account')}>
+            <button type="button" className="avatar-btn" aria-label="Account menu" aria-expanded={menu?.kind === 'account'} {...toggleMenu('account')}>
               <Avatar channel={app.me} size={32} />
             </button>
           </>
@@ -394,13 +394,14 @@ function GuideLink({ href, icon, label, active, trailing, mini }: { href: string
   );
 }
 
-export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions: GuideChannel[] }) {
+export function Guide({ mode, subscriptions, badges }: { mode: GuideMode; subscriptions: GuideChannel[]; badges: { notifications: number; messages: number } }) {
   const app = useApp();
   const path = decodeURIComponent(usePathname());
   const params = useSearchParams();
   const [showAll, setShowAll] = useState(false);
   const list = path === '/playlist' ? params.get('list') : null;
   const is = (p: string) => path === p;
+  const count = (n: number) => n > 0 ? <span className="g-count">{n > 9 ? '9+' : n}</span> : undefined;
 
   if (mode === 'none') return null;
   if (mode === 'mini') {
@@ -437,7 +438,8 @@ export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions:
               <GuideLink href="/studio/content" icon={<Icon name="smart_display" />} label="Your videos" />
               <GuideLink href="/playlist?list=WL" icon={<Icon name="schedule" filled={list === 'WL'} />} label="Watch later" active={list === 'WL'} />
               <GuideLink href="/playlist?list=LL" icon={<Icon name="thumb_up" filled={list === 'LL'} />} label="Liked videos" active={list === 'LL'} />
-              <GuideLink href="/messages" icon={<Icon name="chat" filled={path.startsWith('/messages')} />} label="Messages" active={path.startsWith('/messages')} />
+              <GuideLink href="/messages" icon={<Icon name="chat" filled={path.startsWith('/messages')} />} label="Messages" active={path.startsWith('/messages')} trailing={count(badges.messages)} />
+              <GuideLink href="/feed/notifications" icon={<Icon name="notifications" filled={path === '/feed/notifications'} />} label="Notifications" active={path === '/feed/notifications'} trailing={count(badges.notifications)} />
             </>
           ) : (
             <div className="g-signin">
@@ -474,22 +476,4 @@ export function Guide({ mode, subscriptions }: { mode: GuideMode; subscriptions:
   );
 }
 
-/* ---------------- Bottom nav (phones) ---------------- */
-export function BottomNav() {
-  const path = decodeURIComponent(usePathname());
-  const app = useApp();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const mobile = useIsMobile();
-  if (!mobile) return null;
-  const youActive = path === '/feed/you' || (!!app.me && path === `/${app.me.handle}`);
-  return (
-    <nav className={`bottom-nav ${path.startsWith('/shorts') ? 'on-dark' : ''}`} aria-label="Primary">
-      <Link href="/" className={path === '/' ? 'on' : ''}><Icon name="home" filled={path === '/'} /><span>Home</span></Link>
-      <Link href="/shorts" className={path.startsWith('/shorts') ? 'on' : ''}><ShortsIcon filled={path.startsWith('/shorts')} /><span>Shorts</span></Link>
-      <button type="button" className="bn-create" aria-label="Create" onClick={(e) => setAnchor(e.currentTarget)}><span className="bn-plus"><Icon name="add" size={28} /></span></button>
-      <Link href="/feed/subscriptions" className={path === '/feed/subscriptions' ? 'on' : ''}><Icon name="subscriptions" filled={path === '/feed/subscriptions'} /><span>Subscriptions</span></Link>
-      <Link href="/feed/you" className={youActive ? 'on' : ''}>{app.me ? <Avatar channel={app.me} size={24} /> : <Icon name="account_circle" filled={youActive} />}<span>You</span></Link>
-      {anchor && <CreateMenu anchor={anchor} onClose={() => setAnchor(null)} />}
-    </nav>
-  );
-}
+

@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { computeGuideMode, type GuideMode } from '@/lib/guide-mode';
 import type { Me } from '@/lib/types';
 import { AppProvider, useApp } from './app-context';
-import { BottomNav, Guide, Masthead, type GuideChannel } from './chrome';
+import { Guide, Masthead, type GuideChannel } from './chrome';
 import { GlobalDialogs } from './dialogs';
 import { Player } from './player';
 import { StoryComposer, StoryViewer } from './stories';
@@ -92,9 +92,8 @@ function Frame({ children, subscriptions, badges }: { children: ReactNode; subsc
       <a href="#main" className="skip-link">Skip to content</a>
       <Suspense fallback={null}><TopLoader /></Suspense>
       <Masthead badges={badges} />
-      <Guide mode={mode} subscriptions={subscriptions} />
+      <Guide mode={mode} subscriptions={subscriptions} badges={badges} />
       <main className="page" id="main">{children}</main>
-      <BottomNav />
       <MiniPlayer />
       <Overlays />
       <GlobalKeys />
