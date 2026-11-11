@@ -1191,14 +1191,14 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
   .chips-arrow { display: none; }
   .feed { padding: 0 0 24px; }
   .grid { gap: 0; padding-top: 0; }
-  .card { gap: 0; margin-bottom: 24px; }
-  .card .thumb, .card:hover .thumb { border-radius: 0; }
+  /* YouTube's phone feed: inset cards with rounded thumbnails */
+  .card { gap: 0; margin-bottom: 24px; padding: 0 12px; }
+  .card .thumb, .card:hover .thumb { border-radius: 12px; }
   .card-meta { padding: 12px 36px 0 12px; }
   .card .more { right: 0; top: 4px; opacity: 1; }
   .v-title { font-size: 14px; line-height: 20px; }
   .v-sub { font-size: 12px; line-height: 18px; }
   .card .v-sub, .compact .v-sub { display: flex; flex-wrap: wrap; }
-  .card .v-sub .ch-name::after, .compact .v-sub .ch-name::after { content: '·'; margin: 0 4px; }
   .card .v-sub .verified { display: none; }
   .badge-new { display: none; }
   .thumb-actions { display: none !important; }
