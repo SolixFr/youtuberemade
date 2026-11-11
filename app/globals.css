@@ -482,7 +482,8 @@ img { display: block; }
 .bottom-sheet.dragging .sheet-grab { cursor: grabbing; }
 .sheet-close { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); }
 .sheet-close .icon-btn { width: 36px; height: 36px; background: transparent; box-shadow: none; }
-.sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 16px 20px; scrollbar-width: thin; }
+.sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 16px 20px; scrollbar-width: none; }
+.sheet-scroll::-webkit-scrollbar { display: none; }
 .sheet-scroll .desc-more { display: none; }
 .sheet-scroll .description { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) { .bottom-sheet { animation: none; transition: none; } }
