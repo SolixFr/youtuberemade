@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { saveProgress } from '@/lib/actions/videos';
 import { formatDuration, parseChapters } from '@/lib/format';
-import { Icon, Switch, useIsMobile } from './ui';
+import { Icon, Switch, useIsMobile, useToast } from './ui';
 import { BottomSheet } from './bottom-sheet';
 
 /** The few fields the player needs; the miniplayer and Studio preview pass the same shape. */
@@ -73,6 +73,9 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const [flash, setFlash] = useState<{ icon: string; key: number } | null>(null);
   const [seekHint, setSeekHint] = useState<{ side: 'l' | 'r'; key: number } | null>(null);
   const [fast, setFast] = useState(false);
+  const [statsOn, setStatsOn] = useState(false);
+  const [statsText, setStatsText] = useState('');
+  const toast = useToast();
   const [fs, setFs] = useState(false);
   const watched = useRef(0);
   const lastFlush = useRef(0);
@@ -177,6 +180,45 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     setSeekHint({ side: s < 0 ? 'l' : 'r', key: Date.now() });
     poke();
   }, [poke]);
+  /** Stats for nerds — refreshed once a second while the panel is open. */
+  useEffect(() => {
+    if (!statsOn) return;
+    const tick = () => {
+      const el = video.current;
+      if (!el) return;
+      const q = el.getVideoPlaybackQuality?.();
+      const buffered = el.buffered.length ? Math.max(0, el.buffered.end(el.buffered.length - 1) - el.currentTime) : 0;
+      setStatsText([
+        `Updated: ${new Date().toLocaleTimeString()}`,
+        `Video id: ${v.id}`,
+        `Viewport: ${el.videoWidth}x${el.videoHeight}`,
+        `Current time: ${el.currentTime.toFixed(1)}s / ${dur.toFixed(1)}s`,
+        `Buffer: ${buffered.toFixed(1)}s`,
+        `Dropped frames: ${q ? q.droppedVideoFrames : 'n/a'}`,
+        `Playback speed: ${el.playbackRate}`,
+        `Volume: ${Math.round(el.volume * 100)}%${el.muted ? ' (muted)' : ''}`,
+      ].join('\n'));
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [statsOn, dur, v.id]);
+  const copyDebug = async () => {
+    const el = video.current;
+    const text = [
+      'Vidora — debug info',
+      `Video ID: ${v.id}`,
+      `Source: ${el?.currentSrc || src}`,
+      `Duration: ${dur.toFixed(1)}s`,
+      `Resolution: ${el?.videoWidth || 0}x${el?.videoHeight || 0}`,
+      `Playback rate: ${el?.playbackRate ?? 1}`,
+      `Volume: ${Math.round((el?.volume ?? 1) * 100)}%`,
+      `User agent: ${navigator.userAgent}`,
+      `Date: ${new Date().toISOString()}`,
+    ].join('\n');
+    try { await navigator.clipboard.writeText(text); toast('Debug info copied'); }
+    catch { toast('Couldn’t copy to clipboard'); }
+  };
   const setMute = (m: boolean) => {
     const el = video.current!;
     el.muted = m;
@@ -330,6 +372,8 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           {captionsUrl && <button type="button" className="p-menu-row" onClick={() => { toggleCaptions(); }}><Icon name="closed_caption" /><span>Subtitles/CC</span><span className="p-val">{captions ? 'English' : 'Off'}</span></button>}
           <button type="button" className="p-menu-row" onClick={() => setSettings('sleep')}><Icon name="bedtime" /><span>Sleep timer</span><span className="p-val">{sleepAt ? `${Math.ceil((sleepAt - Date.now()) / 60000)} min` : 'Off'}</span><Icon name="chevron_right" /></button>
           <button type="button" className="p-menu-row" onClick={() => setSettings('speed')}><Icon name="slow_motion_video" /><span>Playback speed</span><span className="p-val">{rate === 1 ? 'Normal' : rate}</span><Icon name="chevron_right" /></button>
+          <button type="button" className="p-menu-row" onClick={() => { setStatsOn((s) => !s); setSettings(null); }}><Icon name="bar_chart" /><span>Stats for nerds</span><span className="p-val">{statsOn ? 'On' : 'Off'}</span></button>
+          <button type="button" className="p-menu-row" onClick={copyDebug}><Icon name="content_copy" /><span>Copy debug info</span></button>
         </>
       )}
       {settings === 'chapters' && (
@@ -385,6 +429,12 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         )}
         {src && wantPreview && <video ref={previewVideo} src={src} muted preload="metadata" className="preview-src" onSeeked={drawPreview} aria-hidden="true" />}
         <div className="p-surface" onPointerDown={onSurfaceDown} onPointerMove={onSurfaceMove} onPointerUp={onSurfaceUp} onDoubleClick={() => lastPointer.current !== 'touch' && !compact && toggleFs()} />
+        {statsOn && (
+          <div className="p-stats" role="status" aria-label="Stats for nerds">
+            <pre>{statsText}</pre>
+            <button type="button" className="p-stats-close" onClick={() => setStatsOn(false)} aria-label="Close stats"><Icon name="close" size={18} /></button>
+          </div>
+        )}
         {fast && <div className="p-fast">2x <Icon name="fast_forward" filled size={18} /></div>}
         {flash && <div key={flash.key} className="p-flash"><Icon name={flash.icon} filled size={36} /></div>}
         {seekHint && <div key={seekHint.key} className={`p-seek ${seekHint.side}`}><Icon name={seekHint.side === 'l' ? 'fast_rewind' : 'fast_forward'} filled />10 seconds</div>}

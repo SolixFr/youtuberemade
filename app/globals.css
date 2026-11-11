@@ -1806,3 +1806,19 @@ a.earn-pill.link:hover { filter: brightness(1.15); }
   .p-surface { touch-action: none; }
   .watch-info { touch-action: none; }
 }
+
+
+/* Player settings sheet — image-3 look: roomier rows, content-hugging height, YouTube spacing */
+.player-sheet { height: auto !important; max-height: 84vh; }
+.player-sheet .sheet-scroll { padding: 0 0 calc(12px + env(safe-area-inset-bottom)); }
+.player-sheet .p-menu-row, .player-sheet .p-menu-head { height: 54px; gap: 18px; padding: 0 18px; font-size: 15px; width: 100%; }
+.player-sheet .p-menu-row .icon { font-size: 25px; }
+.player-sheet .p-menu-row:hover { background: var(--hover); border-radius: 10px; }
+.player-sheet .p-menu-head { height: 56px; font-size: 16px; border-bottom: 1px solid var(--divider); margin-bottom: 8px; }
+.player-sheet .p-val { color: var(--text-2); font-size: 13px; }
+
+/* Stats for nerds — translucent diagnostic panel */
+.p-stats { position: absolute; left: 12px; bottom: 56px; z-index: 4; max-width: min(78vw, 320px); background: rgba(0, 0, 0, 0.82); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 34px 10px 12px; color: #e8e8e8; text-shadow: none; }
+.p-stats pre { margin: 0; font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.p-stats-close { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: transparent; box-shadow: none; }
+.p-stats-close:hover { background: rgba(255, 255, 255, 0.12); }
