@@ -8,13 +8,14 @@ import { PostCard } from '@/components/social';
 import { Avatar, CheckCircleIcon, EmptyState, Icon, MemberBadge } from '@/components/ui';
 import { recentSubscribers } from '@/lib/actions/account';
 import { studioMembersRoster, studioMembersStats } from '@/lib/actions/social';
-import { formatCount, watchHref } from '@/lib/format';
+import { formatCount, nowMs, watchHref } from '@/lib/format';
 import { getMe } from '@/lib/server/auth';
 import { sql } from '@/lib/server/db';
 import { analytics, channelById, channelConfig, channelVideos, commentCount, getVideo, monetization, posts, storyGroups, studioComments } from '@/lib/server/queries';
 import type { Me } from '@/lib/types';
 import { AgreementsDialog, EarnNotify, EarnPanel, EarnTabs, LearningModule, PartnershipsDialog, PayoutsDialog, ShoppingDialog } from './earn-parts';
 import { earnTab } from './earn-shared';
+import { AnalyticsView } from './analytics-parts';
 import { ContentTable, CreateButtons, Customize, EditVideo, GoLive, SendFeedback, StudioComments, StudioStories, SubcountPanel, UploadButton } from './studio-parts';
 
 export const metadata = { title: 'Vidora Studio' };
@@ -207,107 +208,93 @@ function Dashboard({ me }: { me: Me }) {
   );
 }
 
-function Analytics({ me, metric }: { me: Me; metric: string }) {
-  const events = analytics(me.id);
+function Analytics({ me, period }: { me: Me; period: string }) {
+  const now = nowMs();
+  const events = analytics(me.id, 90);
   const vids = channelVideos(me.id, me.id);
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const days = Array.from({ length: 28 }, (_, i) => {
-    const from = start.getTime() - (27 - i) * 86_400_000;
-    return metric === 'hours' ? events.filter((e) => e.at >= from && e.at < from + 86_400_000).reduce((n, e) => n + e.seconds, 0) / 3600 : events.filter((e) => e.at >= from && e.at < from + 86_400_000).length;
+  const m = monetization(me.id);
+  const days = period === '7' ? 7 : period === '90' ? 90 : 28;
+  const startOf = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const today = startOf(now);
+  const DAY = 86_400_000;
+  const since = today - (days - 1) * DAY;
+  const prevSince = since - days * DAY;
+
+  const DAY_LABEL = since;
+  const trendViews: number[] = [];
+  const trendHours: number[] = [];
+  for (let i = 0; i < days; i++) {
+    const a = since + i * DAY, b = a + DAY;
+    const w = events.filter((e) => e.at >= a && e.at < b);
+    trendViews.push(w.length);
+    trendHours.push(w.reduce((n, e) => n + e.seconds, 0) / 3600);
+  }
+  const viewsNow = events.filter((e) => e.at >= since).length;
+  const viewsPrev = events.filter((e) => e.at >= prevSince && e.at < since).length;
+  const hoursNow = events.filter((e) => e.at >= since).reduce((n, e) => n + e.seconds, 0) / 3600;
+  const hoursPrev = events.filter((e) => e.at >= prevSince && e.at < since).reduce((n, e) => n + e.seconds, 0) / 3600;
+  const subsNow = (sql('SELECT COUNT(*) n FROM subscriptions WHERE channel_id = ? AND created_at >= ?').get(me.id, since) as { n: number }).n;
+  const subsPrev = (sql('SELECT COUNT(*) n FROM subscriptions WHERE channel_id = ? AND created_at >= ? AND created_at < ?').get(me.id, prevSince, since) as { n: number }).n;
+  const typical = (cur: number, prev: number) => ({ lo: Math.round(prev * 0.8), hi: Math.max(cur, Math.round(prev * 1.25)), delta: cur - prev });
+  const vTyp = typical(viewsNow, viewsPrev), hTyp = typical(hoursNow, hoursPrev), sTyp = typical(subsNow, subsPrev);
+
+  const publishDays = new Map<string, { video: boolean; short: boolean; live: boolean; n: number }>();
+  for (const v of vids) {
+    if (v.publishedAt < since) continue;
+    const key = startOf(v.publishedAt);
+    const cur = publishDays.get(String(key)) ?? { video: false, short: false, live: false, n: 0 };
+    if (v.type === 'short') cur.short = true; else cur.video = true;
+    if (v.recordedLive) cur.live = true;
+    cur.n += 1;
+    publishDays.set(String(key), cur);
+  }
+  const markers = [...publishDays.entries()].map(([k, m2]) => ({ at: Number(k), n: m2.n, shortOnly: m2.short && !m2.video })).sort((a, b) => a.at - b.at);
+
+  const byVideo = new Map<string, { views: number; seconds: number }>();
+  for (const e of events) {
+    if (e.at < since) continue;
+    const cur = byVideo.get(e.video_id) ?? { views: 0, seconds: 0 };
+    cur.views += 1; cur.seconds += e.seconds;
+    byVideo.set(e.video_id, cur);
+  }
+  const top = vids.map((v) => ({ v, n: byVideo.get(v.id)?.views ?? 0, sec: byVideo.get(v.id)?.seconds ?? 0 })).filter((x) => x.n).sort((a, b) => b.n - a.n).slice(0, 8);
+
+  const hour48 = Array.from({ length: 48 }, (_, i) => {
+    const from = now - (47 - i) * 3_600_000;
+    return events.filter((e) => e.at >= from && e.at < from + 3_600_000).length;
   });
-  const total = events.length;
-  const totalHours = events.reduce((n, e) => n + e.seconds, 0) / 3600;
-  const avgViews = total / 28;
-  const max = Math.max(1e-9, ...days);
-  const W = 800, H = 240;
-  const line = `M${days.map((y, i) => `${((i / 27) * W).toFixed(1)},${(H - 16 - (y / max) * (H - 40)).toFixed(1)}`).join(' L')}`;
-  const byVideo = new Map<string, number>();
-  for (const e of events) byVideo.set(e.video_id, (byVideo.get(e.video_id) ?? 0) + 1);
-  const top = vids.map((v) => ({ v, n: byVideo.get(v.id) ?? 0 })).filter((x) => x.n).sort((a, b) => b.n - a.n).slice(0, 5);
-  const maxTop = Math.max(1, ...top.map((x) => x.n));
+  const views48 = hour48.reduce((a, b) => a + b, 0);
+  const byVideo48 = new Map<string, number>();
+  for (const e of events) {
+    if (now - e.at >= 48 * 3_600_000) continue;
+    byVideo48.set(e.video_id, (byVideo48.get(e.video_id) ?? 0) + 1);
+  }
+  const realtimeTop = vids.map((v) => ({ v, n: byVideo48.get(v.id) ?? 0 })).filter((x) => x.n).sort((a, b) => b.n - a.n).slice(0, 3);
+
+  const latest = vids.filter((v) => v.visibility === 'public' && v.publishedAt <= now).slice(0, 10);
+  const snapshots = latest.map((v) => {
+    const evs = events.filter((e) => e.video_id === v.id);
+    const seen = evs.length;
+    const sec = evs.reduce((n2, e) => n2 + e.seconds, 0);
+    return { id: v.id, title: v.title, thumbnail: v.thumbnail, publishedAt: v.publishedAt, likes: v.likes, views: seen, avgPct: seen && v.duration ? Math.min(100, Math.round(((sec / seen) / v.duration) * 100)) : 0, ageMs: now - v.publishedAt };
+  });
+
+  const data = {
+    days, viewsNow, hoursNow, subsNow, earnings: m.earnings, partner: m.partner,
+    vTyp, hTyp, sTyp, trendViews, trendHours, markers, since: DAY_LABEL,
+    top: top.map(({ v, n, sec }) => ({ id: v.id, title: v.title, thumbnail: v.thumbnail, publishedAt: v.publishedAt, views: n, avgSec: sec, pct: n && v.duration ? Math.min(100, Math.round(((sec / n) / v.duration) * 100)) : 0 })),
+    rtBars: hour48, views48, mySubs: me.subscribers,
+    rtTop: realtimeTop.map(({ v, n }) => ({ id: v.id, title: v.title, thumbnail: v.thumbnail, views: n })),
+    snapshots,
+  };
+
   return (
     <>
-      <h1>Channel analytics</h1>
-      <p className="muted subtitle">Plays of your videos over the last 28 days, from all viewers.</p>
-      <div className="dash2">
-        <section className="s-card dash-span-7">
-          <h2>{metric === 'hours' ? 'Watch time' : 'Views'} — last 28 days</h2>
-          <div className="stat-inline">
-            <div><b>{metric === 'hours' ? totalHours.toLocaleString('en', { maximumFractionDigits: 1 }) : total.toLocaleString()}</b><span>{metric === 'hours' ? 'hours watched' : 'total views'}</span></div>
-            <div><b>{metric === 'hours' ? `${(totalHours / 28).toFixed(1)} h` : Math.round(avgViews).toLocaleString()}</b><span>{metric === 'hours' ? 'per day' : 'views per day'}</span></div>
-            <div><b>{events.length ? Math.max(...days).toLocaleString() : '0'}</b><span>best day</span></div>
-          </div>
-          {events.length ? (
-            <>
-              <svg className="dash-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${metric === 'hours' ? 'Watch time' : 'Views'} per day`}>
-                {[0.25, 0.5, 0.75].map((f) => <line key={f} className="grid-line" x1="0" x2={W} y1={16 + (1 - f) * (H - 32)} y2={16 + (1 - f) * (H - 32)} />)}
-                <path className="area" d={`${line} L${W},${H - 16} L0,${H - 16} Z`} />
-                <path className="line" d={line} />
-              </svg>
-              <div className="chart-axis"><span>28 days ago</span><span>14 days ago</span><span>Today</span></div>
-            </>
-          ) : <p className="muted">No views yet — analytics will populate once your videos start getting watched.</p>}
-          <RouteChips param="metric" fallback="views" items={[{ id: 'views', label: `Views (${total.toLocaleString()})` }, { id: 'hours', label: `Watch time (${totalHours.toFixed(1)} h)` }]} />
-        </section>
-        <section className="s-card dash-span-5">
-          <h2>Top content</h2>
-          {top.length ? (
-            <ol className="bar-list">
-              {top.map(({ v, n }, i) => (
-                <li key={v.id}>
-                  <span className="bar-rank">{i + 1}</span>
-                  <div className="bar-body">
-                    <Link href={watchHref(v)} className="bar-title">{v.title}</Link>
-                    <div className="bar-row">
-                      <div className="bar-track"><i style={{ width: `${(n / maxTop) * 100}%` }} /></div>
-                      <b className="bar-n">{formatCount(n)}</b>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : <p className="muted">Your best-performing videos will rank here once they start getting plays.</p>}
-        </section>
-        <section className="s-card dash-span-5">
-          <h2>Lifetime</h2>
-          <div className="stat-inline">
-            <div><b>{vids.filter((v) => v.type === 'video').length}</b><span>Videos</span></div>
-            <div><b>{vids.filter((v) => v.type === 'short').length}</b><span>Shorts</span></div>
-            <div><b>{vids.reduce((n, v) => n + v.views, 0).toLocaleString()}</b><span>Views</span></div>
-            <div><b>{me.subscribers.toLocaleString()}</b><span>Subscribers</span></div>
-          </div>
-        </section>
-        <section className="s-card dash-span-7">
-          <h2>Best days</h2>
-          {events.length ? (
-            <ol className="bar-list">
-              {(() => {
-                const byDay = new Map<number, number>();
-                for (const e of events) {
-                  const d = new Date(e.at);
-                  d.setHours(0, 0, 0, 0);
-                  byDay.set(d.getTime(), (byDay.get(d.getTime()) ?? 0) + 1);
-                }
-                return [...byDay.entries()]
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 6)
-                  .map(([day, n]) => (
-                    <li key={day}>
-                      <div className="bar-body">
-                        <span className="bar-title" style={{ cursor: 'default' }}>{new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}</span>
-                        <div className="bar-row">
-                          <div className="bar-track"><i style={{ width: `${(n / Math.max(...byDay.values())) * 100}%` }} /></div>
-                          <b className="bar-n">{formatCount(n)}</b>
-                        </div>
-                      </div>
-                    </li>
-                  ));
-              })()}
-            </ol>
-          ) : <p className="muted">Your best days will appear here once analytics starts recording plays.</p>}
-        </section>
+      <div className="am-head">
+        <h1>Channel analytics</h1>
+        <RouteChips param="metric" fallback="28" items={[{ id: '7', label: 'Last 7 days' }, { id: '28', label: 'Last 28 days' }, { id: '90', label: 'Last 90 days' }]} />
       </div>
+      <AnalyticsView data={data} />
     </>
   );
 }
@@ -346,7 +333,7 @@ export default async function StudioPage({ params, searchParams }: { params: Pro
     const v = getVideo(arg, me.id);
     if (!v || v.channel.id !== me.id) notFound();
     body = <EditVideo video={v} />;
-  } else if (section === 'analytics') body = <Analytics me={me} metric={metric} />;
+  } else if (section === 'analytics') body = <Analytics me={me} period={metric} />;
   else if (section === 'comments') {
     const rows = studioComments(me.id, me.id).filter((r) => r.comment.author.id !== me.id);
     body = (

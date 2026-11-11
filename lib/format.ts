@@ -63,3 +63,5 @@ export function parseChapters(description: string, duration: number): { t: numbe
 
 /** Link to a video: Shorts open in the vertical player, everything else on the watch page. */
 export const watchHref = (v: { id: string; type: 'video' | 'short' }, extra = '') => (v.type === 'short' ? `/shorts/${v.id}` : `/watch?v=${v.id}${extra}`);
+/** Server-side timestamp for render-time use (plain helper, not a component). */
+export const nowMs = () => Date.now();
