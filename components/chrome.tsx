@@ -235,13 +235,13 @@ function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => 
   }, [view, accounts]);
   if (view === 'theme') {
     return (
-      <Menu anchor={anchor} onClose={onClose} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Appearance</span></div>}
+      <Menu anchor={anchor} onClose={onClose} sheet={false} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Appearance</span></div>}
         items={THEMES.map((t) => ({ icon: '', label: t.label, checked: t.id === theme, keepOpen: true, onSelect: () => { setThemeState(t.id); applyTheme(t.id); } }))} />
     );
   }
   if (view === 'switch') {
     return (
-      <Menu anchor={anchor} onClose={onClose} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Switch account</span></div>}>
+      <Menu anchor={anchor} onClose={onClose} sheet={false} header={<div className="menu-back"><IconButton icon="arrow_back" label="Back" onClick={() => setView('main')} /><span>Switch account</span></div>}>
         <button type="button" className="account-switch-row current" disabled aria-current="true">
           <Avatar channel={me} size={44} />
           <span className="account-switch-text"><b>{me.name}</b><small>{me.handle} · {subsLabel(me.subscribers)}</small></span>
@@ -268,10 +268,11 @@ function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => 
   }
   const items: MenuItem[] = [
     { icon: 'account_box', label: 'Your channel', href: `/${me.handle}` },
-    { icon: 'video_settings', label: 'Vidora Studio', href: '/studio' },
-    { icon: 'chat', label: 'Messages', href: '/messages' },
     { icon: 'switch_account', label: 'Switch account', trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('switch') },
     { icon: 'logout', label: 'Sign out', onSelect: async () => { await signOut(); router.push('/'); router.refresh(); } },
+    { divider: true, label: '' },
+    { icon: 'video_settings', label: 'Vidora Studio', href: '/studio' },
+    { icon: 'chat', label: 'Messages', href: '/messages' },
     { divider: true, label: '' },
     { icon: theme === 'light' ? 'light_mode' : 'dark_mode', label: `Appearance: ${THEMES.find((t) => t.id === theme)!.label.replace(' theme', '')}`, trailing: <Icon name="chevron_right" />, keepOpen: true, onSelect: () => setView('theme') },
     { icon: 'keyboard', label: 'Keyboard shortcuts', onSelect: () => app.open({ kind: 'shortcuts' }) },
@@ -280,9 +281,9 @@ function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => 
     { icon: 'info', label: 'About & credits', href: '/about' },
   ];
   return (
-    <Menu anchor={anchor} onClose={onClose} className="account-menu" items={items} header={
+    <Menu anchor={anchor} onClose={onClose} sheet={false} className="account-menu" items={items} header={
       <div className="account-head">
-        <Avatar channel={me} size={40} />
+        <Avatar channel={me} size={56} />
         <div><div className="account-name">{me.name}</div><div>{me.handle}</div><Link href={`/${me.handle}`} onClick={onClose} className="link">View your channel</Link></div>
       </div>
     } />

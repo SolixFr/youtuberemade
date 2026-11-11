@@ -376,6 +376,7 @@ img { display: block; }
 .ch-name:hover { color: var(--text); }
 .v-sub .ch-name { display: flex; }
 .verified { color: var(--text-2); }
+.verified-badge { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; cursor: default; }
 .views-line { display: block; }
 .dot-sep::before { content: '•'; margin: 0 4px; }
 .badge-new { display: inline-block; margin-top: 4px; padding: 0 4px; border-radius: 4px; background: var(--tonal); color: var(--text-2); font-size: 12px; font-weight: 500; line-height: 18px; }
@@ -436,9 +437,9 @@ img { display: block; }
 .menu-trailing { margin-left: auto; display: inline-flex; color: var(--text-2); }
 .menu-title { padding: 8px 16px 12px; font-size: 16px; font-weight: 500; }
 .menu-back { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; border-bottom: 1px solid var(--divider); margin-bottom: 8px; font-size: 16px; }
-.account-menu { width: 264px; }
-.account-menu .menu-item { min-height: 32px; gap: 14px; }
-.account-head { display: flex; gap: 12px; padding: 8px 14px 12px; border-bottom: 1px solid var(--divider); margin-bottom: 6px; font-size: 15px; line-height: 21px; }
+.account-menu { width: 300px; }
+.account-menu .menu-item { min-height: 40px; gap: 18px; font-size: 15px; }
+.account-head { display: flex; gap: 16px; padding: 14px 16px 12px; border-bottom: 1px solid var(--divider); margin-bottom: 6px; font-size: 15px; line-height: 21px; align-items: center; }
 .account-menu .menu-title { padding: 6px 14px 10px; font-size: 15px; }
 .account-name { font-weight: 500; }
 .account-head .link { display: inline-block; margin-top: 8px; font-size: 14px; }
@@ -1163,10 +1164,13 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
   .mobile-only { display: inline-flex !important; }
   .masthead { height: 48px; padding: 0 4px 0 12px; gap: 0; }
   .mh-start { min-width: 0; }
-  .mh-start .guide-btn { display: none; }
   .logo { padding: 12px 0; }
   .mh-center { display: none; }
-  .mh-end { min-width: 0; gap: 0; }
+  .mh-end { min-width: 0; gap: 4px; }
+  /* YouTube's phone bar: the Create action is just a + */
+  .create-btn { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
+  .create-btn .btn-label { display: none; }
+  .create-btn .icon { margin-left: 0; }
   .masthead.msearch { padding: 0 4px; gap: 4px; }
   .masthead.msearch .search { gap: 4px; }
   .masthead.msearch .search-box { border: 0; border-radius: 20px; background: var(--tonal); padding-left: 16px; }
@@ -1176,7 +1180,7 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
   .masthead.msearch .suggest { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; border-radius: 0; border: 0; box-shadow: none; background: var(--bg); padding: 0; }
   .masthead.msearch .suggest li { padding: 12px 16px; font-weight: 400; }
   .page { padding-top: 48px; margin-left: 0 !important; }
-  .guide, .guide-mini { display: none; }
+  .guide-mini { display: none; }
   .notif-menu.sheet { top: 48px; bottom: calc(8px + env(safe-area-inset-bottom)); left: 0; right: 0; border-radius: 0; max-height: none; }
   .dialog-scrim { align-items: flex-end; padding: 0; }
   .dialog { width: 100% !important; border-radius: 12px 12px 0 0; max-height: 92vh; }

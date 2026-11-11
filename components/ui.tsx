@@ -131,20 +131,28 @@ export function Chips<T extends string>({ items, value, onChange, className = ''
 
 /* ---------- Media queries ---------- */
 const mobileQuery = '(max-width: 791px)';
-function subscribeMedia(cb: () => void) {
-  const q = matchMedia(mobileQuery);
-  q.addEventListener('change', cb);
-  return () => q.removeEventListener('change', cb);
-}
+/** SSR-safe breakpoint flag: server and first client render agree on false; measured after mount. */
 export function useIsMobile(): boolean {
-  return useSyncExternalStore(subscribeMedia, () => matchMedia(mobileQuery).matches, () => false);
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const q = matchMedia(mobileQuery);
+    const apply = () => setMobile(q.matches);
+    apply();
+    q.addEventListener('change', apply);
+    return () => q.removeEventListener('change', apply);
+  }, []);
+  return mobile;
 }
-function subscribeResize(cb: () => void) {
-  window.addEventListener('resize', cb);
-  return () => window.removeEventListener('resize', cb);
-}
+/** SSR-safe window width: server and first client render agree on 1440; the real width is measured after mount. */
 export function useWindowWidth(): number {
-  return useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 1440);
+  const [width, setWidth] = useState(1440);
+  useEffect(() => {
+    const measure = () => setWidth(window.innerWidth);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  return width;
 }
 
 function Portal({ children }: { children: ReactNode }) {

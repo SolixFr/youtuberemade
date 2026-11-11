@@ -11,7 +11,14 @@ import { useApp } from './app-context';
 import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
 
 export function VerifiedBadge() {
-  return <CheckCircleIcon size={14} className="verified" />;
+  // Clicking the badge must not navigate (YouTube's verified mark shows a tooltip,
+  // name goes to channel). preventDefault blocks the enclosing link.
+  return (
+    <span className="verified-badge" data-tooltip="Verified" role="img" aria-label="Verified"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+      <CheckCircleIcon size={14} className="verified" />
+    </span>
+  );
 }
 
 export function ChannelName({ channel, className = '' }: { channel: ChannelLite; className?: string }) {
