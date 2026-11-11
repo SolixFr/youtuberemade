@@ -522,7 +522,8 @@ img { display: block; }
 .two-fields .field { flex: 1; }
 .label { font-size: 12px; color: var(--text-2); margin: 0 0 8px; }
 
-.share-targets { display: flex; gap: 16px; overflow-x: auto; padding: 8px 0 24px; }
+.share-targets { display: flex; gap: 16px; overflow-x: auto; padding: 8px 0 24px; scrollbar-width: none; }
+.share-targets::-webkit-scrollbar { display: none; }
 .share-target { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; min-width: 64px; }
 .share-circle { width: 60px; height: 60px; border-radius: 50%; background: var(--tonal); display: flex; align-items: center; justify-content: center; }
 .share-target:hover .share-circle { background: var(--tonal-hover); }
@@ -661,7 +662,8 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .description.open .desc-body { display: block; }
 .desc-more { font-weight: 500; margin-top: 4px; display: inline-block; }
 .ts-link, .hashtag { color: var(--blue); cursor: pointer; }
-.chapter-list { display: flex; gap: 8px; overflow-x: auto; }
+.chapter-list { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chapter-list::-webkit-scrollbar { display: none; }
 .chapter-btn { display: flex; flex-direction: column; gap: 6px; text-align: left; width: 168px; flex-shrink: 0; padding: 8px; border-radius: 8px; background: var(--bg); }
 .chapter-btn:hover { background: var(--hover); }
 .chapter-btn b { font-weight: 500; }
@@ -1329,7 +1331,7 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
 
   .route-studio .page { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
   .studio { flex-direction: column; }
-  .studio-nav { position: fixed; top: auto; bottom: calc(48px + env(safe-area-inset-bottom)); left: 0; right: 0; width: 100vw; height: 56px; display: flex; overflow-x: auto; border: 0; border-top: 1px solid var(--divider); background: var(--bg); z-index: 90; padding: 0; }
+  .studio-nav { position: fixed; top: auto; bottom: calc(48px + env(safe-area-inset-bottom)); left: 0; right: 0; width: 100vw; height: 56px; display: flex; overflow-x: auto; scrollbar-width: none; border: 0; border-top: 1px solid var(--divider); background: var(--bg); z-index: 90; padding: 0; }
   .studio-thumb, .studio-bottom, .studio-divider { display: none; }
   .studio-items { display: flex; margin: 0; flex: 1; }
   .studio-items li { flex: 1; min-width: 56px; }
