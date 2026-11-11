@@ -3,7 +3,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { saveProgress } from '@/lib/actions/videos';
 import { formatDuration, parseChapters } from '@/lib/format';
-import { Icon, Switch } from './ui';
+import { Icon, Switch, useIsMobile } from './ui';
+import { BottomSheet } from './bottom-sheet';
 
 /** The few fields the player needs; the miniplayer and Studio preview pass the same shape. */
 export interface PlayerVideo {
@@ -45,6 +46,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
 ) {
   const src = v.src;
   const captionsUrl = v.captions;
+  const mobile = useIsMobile();
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const previewVideo = useRef<HTMLVideoElement>(null);
@@ -306,6 +308,54 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const segments = chapters.length ? chapters.map((c, i) => ({ start: c.t, end: chapters[i + 1]?.t ?? dur })) : [{ start: 0, end: dur }];
   const showUi = ui || paused || settings !== null;
 
+  const settingsLabel = settings === 'main' ? 'Settings' : settings === 'chapters' ? 'Chapters' : settings === 'speed' ? 'Playback speed' : 'Sleep timer';
+  // The same rows render in the floating menu on desktop and the bottom sheet (image-3) on phones.
+  const settingsContent = (
+    <>
+      {settings === 'main' && (
+        <>
+          <div className="p-menu-row"><Icon name="motion_photos_auto" /><span>Ambient mode</span><Switch label="Ambient mode" on={ambientOn} onChange={(x) => { prefs.ambient = x; setAmbientOn(x); }} /></div>
+          <div className="p-menu-row"><Icon name="repeat" /><span>Loop</span><Switch label="Loop" on={loop} onChange={setLoop} /></div>
+          {captionsUrl && <button type="button" className="p-menu-row" onClick={() => { toggleCaptions(); }}><Icon name="closed_caption" /><span>Subtitles/CC</span><span className="p-val">{captions ? 'English' : 'Off'}</span></button>}
+          <button type="button" className="p-menu-row" onClick={() => setSettings('sleep')}><Icon name="bedtime" /><span>Sleep timer</span><span className="p-val">{sleepAt ? `${Math.ceil((sleepAt - Date.now()) / 60000)} min` : 'Off'}</span><Icon name="chevron_right" /></button>
+          <button type="button" className="p-menu-row" onClick={() => setSettings('speed')}><Icon name="slow_motion_video" /><span>Playback speed</span><span className="p-val">{rate === 1 ? 'Normal' : rate}</span><Icon name="chevron_right" /></button>
+        </>
+      )}
+      {settings === 'chapters' && (
+        <>
+          <button type="button" className="p-menu-head" onClick={() => setSettings(null)}><Icon name="chevron_left" />Chapters</button>
+          {chapters.map((c) => (
+            <button type="button" key={c.t} className="p-menu-row" onClick={() => { const el = video.current!; el.currentTime = c.t; setT(c.t); setSettings(null); }}>
+              <span className="p-check">{chapterNow?.t === c.t && <Icon name="check" />}</span>
+              <span>{c.title}</span>
+              <span className="p-val">{formatDuration(c.t)}</span>
+            </button>
+          ))}
+        </>
+      )}
+      {settings === 'speed' && (
+        <>
+          <button type="button" className="p-menu-head" onClick={() => setSettings('main')}><Icon name="chevron_left" />Playback speed</button>
+          {RATES.map((r) => (
+            <button type="button" key={r} className="p-menu-row" onClick={() => { video.current!.playbackRate = r; prefs.rate = r; setRate(r); setSettings(null); }}>
+              <span className="p-check">{rate === r && <Icon name="check" />}</span><span>{r === 1 ? 'Normal' : r}</span>
+            </button>
+          ))}
+        </>
+      )}
+      {settings === 'sleep' && (
+        <>
+          <button type="button" className="p-menu-head" onClick={() => setSettings('main')}><Icon name="chevron_left" />Sleep timer</button>
+          {[0, 10, 15, 20, 30, 45, 60].map((m) => (
+            <button type="button" key={m} className="p-menu-row" onClick={() => { setSleepAt(m ? Date.now() + m * 60000 : null); setSettings(null); }}>
+              <span className="p-check">{(m === 0 ? !sleepAt : false) && <Icon name="check" />}</span><span>{m ? `${m} minutes` : 'Off'}</span>
+            </button>
+          ))}
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="player-wrap">
       {ambientOn && !compact && <canvas ref={ambient} className="ambient" width={32} height={18} aria-hidden="true" />}
@@ -329,51 +379,30 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         {seekHint && <div key={seekHint.key} className={`p-seek ${seekHint.side}`}><Icon name={seekHint.side === 'l' ? 'fast_rewind' : 'fast_forward'} filled />10 seconds</div>}
         <div className="p-gradient" />
 
-        {settings && (
-          <div className="p-menu" onPointerUp={(e) => e.stopPropagation()}>
-            {settings === 'main' && (
-              <>
-                <div className="p-menu-row"><Icon name="motion_photos_auto" /><span>Ambient mode</span><Switch label="Ambient mode" on={ambientOn} onChange={(x) => { prefs.ambient = x; setAmbientOn(x); }} /></div>
-                <div className="p-menu-row"><Icon name="repeat" /><span>Loop</span><Switch label="Loop" on={loop} onChange={setLoop} /></div>
-                {captionsUrl && <button type="button" className="p-menu-row" onClick={() => { toggleCaptions(); }}><Icon name="closed_caption" /><span>Subtitles/CC</span><span className="p-val">{captions ? 'English' : 'Off'}</span></button>}
-                <button type="button" className="p-menu-row" onClick={() => setSettings('sleep')}><Icon name="bedtime" /><span>Sleep timer</span><span className="p-val">{sleepAt ? `${Math.ceil((sleepAt - Date.now()) / 60000)} min` : 'Off'}</span><Icon name="chevron_right" /></button>
-                <button type="button" className="p-menu-row" onClick={() => setSettings('speed')}><Icon name="slow_motion_video" /><span>Playback speed</span><span className="p-val">{rate === 1 ? 'Normal' : rate}</span><Icon name="chevron_right" /></button>
-              </>
-            )}
-            {settings === 'chapters' && (
-              <>
-                <button type="button" className="p-menu-head" onClick={() => setSettings(null)}><Icon name="chevron_left" />Chapters</button>
-                {chapters.map((c) => (
-                  <button type="button" key={c.t} className="p-menu-row" onClick={() => { const el = video.current!; el.currentTime = c.t; setT(c.t); setSettings(null); }}>
-                    <span className="p-check">{chapterNow?.t === c.t && <Icon name="check" />}</span>
-                    <span>{c.title}</span>
-                    <span className="p-val">{formatDuration(c.t)}</span>
-                  </button>
-                ))}
-              </>
-            )}
-            {settings === 'speed' && (
-              <>
-                <button type="button" className="p-menu-head" onClick={() => setSettings('main')}><Icon name="chevron_left" />Playback speed</button>
-                {RATES.map((r) => (
-                  <button type="button" key={r} className="p-menu-row" onClick={() => { video.current!.playbackRate = r; prefs.rate = r; setRate(r); setSettings(null); }}>
-                    <span className="p-check">{rate === r && <Icon name="check" />}</span><span>{r === 1 ? 'Normal' : r}</span>
-                  </button>
-                ))}
-              </>
-            )}
-            {settings === 'sleep' && (
-              <>
-                <button type="button" className="p-menu-head" onClick={() => setSettings('main')}><Icon name="chevron_left" />Sleep timer</button>
-                {[0, 10, 15, 20, 30, 45, 60].map((m) => (
-                  <button type="button" key={m} className="p-menu-row" onClick={() => { setSleepAt(m ? Date.now() + m * 60000 : null); setSettings(null); }}>
-                    <span className="p-check">{(m === 0 ? !sleepAt : false) && <Icon name="check" />}</span><span>{m ? `${m} minutes` : 'Off'}</span>
-                  </button>
-                ))}
-              </>
-            )}
+        {/* Mobile: CC + settings live top-right on the video; transport controls center — like YouTube's phone player */}
+        {mobile && !compact && (
+          <div className="p-toprow">
+            {captionsUrl && <button type="button" className={`p-btn p-topbtn ${captions ? 'cc-on' : ''}`} onClick={toggleCaptions} aria-label="Subtitles/closed captions (c)"><Icon name="closed_caption" filled={captions} size={22} /></button>}
+            <button type="button" className={`p-btn p-topbtn ${settings ? 'open' : ''}`} onClick={() => setSettings(settings ? null : 'main')} aria-label="Settings"><Icon name="settings" size={22} /></button>
           </div>
         )}
+        {mobile && !compact && (
+          <div className="p-center">
+            <button type="button" className="p-cbtn" onClick={() => seekBy(-10)} aria-label="Back 10 seconds"><Icon name="replay_10" filled size={42} /></button>
+            <button type="button" className="p-cbtn p-cplay" onClick={toggle} aria-label={paused ? 'Play' : 'Pause'}><Icon name={paused ? 'play_arrow' : 'pause'} filled size={64} /></button>
+            <button type="button" className="p-cbtn" onClick={() => seekBy(10)} aria-label="Forward 10 seconds"><Icon name="forward_10" filled size={42} /></button>
+          </div>
+        )}
+
+        {settings && (mobile ? (
+          <BottomSheet onClose={() => setSettings(null)} label={settingsLabel} className="player-sheet">
+            <div className="p-rows">{settingsContent}</div>
+          </BottomSheet>
+        ) : (
+          <div className="p-menu" onPointerUp={(e) => e.stopPropagation()}>
+            {settingsContent}
+          </div>
+        ))}
 
         <div className="p-controls">
           <div className="p-bar" ref={bar} onPointerDown={scrub} onPointerMove={(e) => hoverPreview(e.clientX)} onPointerLeave={() => setHoverX(null)}>
@@ -421,11 +450,11 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 <Switch label="Autoplay" on={!!autoplayNext} onChange={onAutoplayNext} />
               </span>
             )}
-            <button type="button" className={`p-btn ${captions ? 'cc-on' : ''}`} disabled={!captionsUrl} onClick={toggleCaptions}
+            <button type="button" className={`p-btn hide-mobile ${captions ? 'cc-on' : ''}`} disabled={!captionsUrl} onClick={toggleCaptions}
               aria-label="Subtitles/closed captions (c)" data-tip={captionsUrl ? 'Subtitles/closed captions (c)' : 'Subtitles/CC unavailable'}>
               <Icon name="closed_caption" filled={captions} size={28} />
             </button>
-            <button type="button" className={`p-btn p-settings ${settings ? 'open' : ''}`} onClick={() => setSettings(settings ? null : 'main')} aria-label="Settings" data-tip="Settings"><Icon name="settings" size={26} /></button>
+            <button type="button" className={`p-btn p-settings hide-mobile ${settings ? 'open' : ''}`} onClick={() => setSettings(settings ? null : 'main')} aria-label="Settings" data-tip="Settings"><Icon name="settings" size={26} /></button>
             {onMini && <button type="button" className="p-btn hide-mobile" onClick={() => onMini(video.current?.currentTime ?? 0, !paused)} aria-label="Miniplayer (i)" data-tip="Miniplayer (i)"><Icon name="picture_in_picture_alt" size={26} /></button>}
             {onTheater && <button type="button" className="p-btn hide-mobile" onClick={onTheater} aria-label={theater ? 'Default view (t)' : 'Theater mode (t)'} data-tip={theater ? 'Default view (t)' : 'Theater mode (t)'}><Icon name={theater ? 'crop_landscape' : 'crop_16_9'} size={28} /></button>}
             <button type="button" className="p-btn" onClick={toggleFs} aria-label={fs ? 'Exit full screen (f)' : 'Full screen (f)'} data-tip={fs ? 'Exit full screen (f)' : 'Full screen (f)'}><Icon name={fs ? 'fullscreen_exit' : 'fullscreen'} size={30} /></button>

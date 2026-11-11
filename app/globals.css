@@ -1779,3 +1779,23 @@ a.earn-pill.link:hover { filter: brightness(1.15); }
 .membership-tier-price { margin-left: auto; color: var(--text-2); }
 .membership-tier-current { font-size: 11px; font-weight: 600; color: var(--blue); background: var(--blue-hover); padding: 2px 8px; border-radius: 10px; }
 @media (max-width: 640px) { .membership-hero { flex-direction: column; align-items: flex-start; padding: 20px; gap: 14px; } }
+
+
+/* ============ Phone player: overlay chrome (YouTube-style) ============ */
+.p-toprow { display: none; position: absolute; top: 8px; right: 10px; z-index: 4; gap: 4px; align-items: center; transition: opacity 0.25s; }
+.p-center { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 4; align-items: center; gap: 44px; transition: opacity 0.25s; }
+.p-cbtn { width: 52px; height: 52px; border-radius: 50%; color: #fff; display: inline-flex; align-items: center; justify-content: center; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+.p-cbtn:active { scale: 0.92; }
+.p-cplay { width: 84px; height: 84px; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); }
+.p-topbtn { width: 38px; height: 38px; border-radius: 50%; background: rgba(0, 0, 0, 0.4); box-shadow: none; }
+.p-topbtn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.55); scale: none; }
+.p-rows { display: flex; flex-direction: column; }
+.player-sheet { z-index: 430; }
+@media (max-width: 791px) {
+  .p-toprow { display: flex; }
+  .p-center { display: flex; }
+  .player:not(.show-ui) .p-toprow, .player:not(.show-ui) .p-center { opacity: 0; pointer-events: none; }
+  .p-gradient { height: 88px; }
+  .p-btn { width: 40px; height: 40px; }
+  .p-row { height: 40px; }
+}
