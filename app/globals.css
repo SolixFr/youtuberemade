@@ -618,7 +618,8 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 
 /* ============ Watch page ============ */
 .watch { display: flex; gap: 24px; padding: 24px 24px 48px; max-width: 1754px; margin: 0 auto; }
-.watch-primary { flex: 1; min-width: 0; }
+.watch-primary { flex: 1; min-width: 0; isolation: isolate; position: relative; }
+.watch-ambient { display: none; }
 .watch-secondary { width: 402px; flex-shrink: 0; min-width: 300px; }
 .watch.theater { flex-wrap: wrap; padding-top: 0; max-width: none; }
 .watch.theater .watch-player { width: calc(100% + 48px); margin: 0 -24px 0; }
@@ -1244,6 +1245,9 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
   .w-owner-text { flex: 1; margin-right: 12px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .w-buttons { margin: 0 -12px; padding: 0 12px; }
   .w-buttons .btn, .w-buttons .seg, .w-buttons .seg button { height: 32px; font-size: 12px; }
+  .w-buttons .seg .count { display: none; }
+  /* Ambient glow behind the content — the video tint bleeds under the title, like YouTube */
+  .watch-ambient { display: block; position: absolute; z-index: -1; top: 0; left: 0; right: 0; height: 430px; width: 100%; object-fit: cover; object-position: center 30%; filter: blur(72px) brightness(0.75) saturate(1.25); opacity: 0.6; pointer-events: none; -webkit-mask-image: linear-gradient(#000 50%, transparent); mask-image: linear-gradient(#000 50%, transparent); }
   .comments { display: none; }
   .c-teaser { display: block; margin-top: 16px; padding: 12px; border-radius: 12px; background: var(--tonal); cursor: pointer; }
   .c-teaser-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }

@@ -167,6 +167,8 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   return (
     <div className={`watch ${theater && !mobile ? 'theater' : ''}`}>
       <div className="watch-primary">
+        {/* Ambient glow from the video's thumbnail — YouTube's ambient backdrop on phones */}
+        <img className="watch-ambient" src={v.thumbnail} alt="" aria-hidden="true" loading="lazy" decoding="async" />
         <div className="watch-player">
           <Player ref={player} video={v} hotkeys startAt={startAt} clip={clip} theater={theater}
             autoplayNext={autoplay}
@@ -185,7 +187,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
         </div>
         <div className="watch-info">
           <h1 className="w-title">{v.title}</h1>
-          <div className="w-meta-mobile">{formatCount(v.views)} views · <Ago ts={v.publishedAt} /> <button type="button" onClick={() => setDescOpen(true)}>…more</button></div>
+          <div className="w-meta-mobile"><span className="w-meta-handle">@{v.channel.handle.replace(/^@/, '')}</span> · {formatCount(likes)} likes · {formatCount(v.views)} views · <Ago ts={v.publishedAt} /> <button type="button" onClick={() => setDescOpen(true)}>…more</button></div>
           <div className="w-actions">
             <div className="w-owner">
               <ChannelAvatar channel={v.channel} size={40} />
@@ -197,7 +199,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             </div>
             <div className="w-buttons">
               <div className="seg">
-                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon key={likeBurst} name="thumb_up" filled={rating === 1} className={likeBurst ? 'seg-burst' : ''} />{formatCount(likes)}</button>
+                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon key={likeBurst} name="thumb_up" filled={rating === 1} className={likeBurst ? 'seg-burst' : ''} /><span className="count">{formatCount(likes)}</span></button>
                 <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /></button>
               </div>
               <Button icon="share" data-tooltip="Share" aria-label="Share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
