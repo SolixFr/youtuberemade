@@ -54,6 +54,28 @@ function qualityOf(id: string) {
 /** Temporary viral windows live in memory; a restart just clears them. */
 const boosts = new Map<string, { until: number; mult: number }>();
 
+/* Shorts push in stages, YouTube-style: a small test cohort, then wider waves,
+   gated by engagement. Everything is recomputed from live numbers every tick. */
+const SHORT_STAGE_MULT = [0, 2.4, 9, 34, 130, 420];
+type ShortStage = { stage: number; since: number; likesRef: number; viewsRef: number };
+const shortStages = new Map<string, ShortStage>();
+const seedStage = (views: number) => (views >= 200_000 ? 5 : views >= 60_000 ? 4 : views >= 15_000 ? 3 : views >= 3_000 ? 2 : 1);
+
+/** Current wave size multiplier for a Short, promoting/cooling it on performance. */
+function shortWave(id: string, likes: number, views: number, now: number) {
+  let s = shortStages.get(id);
+  if (!s) { s = { stage: seedStage(views), since: now, likesRef: likes, viewsRef: views }; shortStages.set(id, s); }
+  if (now - s.since > 10 * 60_000) {
+    const gainedViews = views - s.viewsRef;
+    const gainedLikes = likes - s.likesRef;
+    const engagement = gainedViews > 0 ? gainedLikes / gainedViews : 0;
+    if (engagement >= 0.035 && s.stage < SHORT_STAGE_MULT.length - 1) s.stage += 1;   // earned the next wave
+    else if (engagement < 0.015) s.stage = Math.max(0, s.stage - 1);                    // cooled a tier; 0 = stalled
+    s.since = now; s.likesRef = likes; s.viewsRef = views;
+  }
+  return SHORT_STAGE_MULT[s.stage] ?? 1;
+}
+
 function tick() {
   const now = Date.now();
 
@@ -78,15 +100,22 @@ function tick() {
     const recentSim = batch > 0 ? (sql("SELECT id, author_name FROM comments WHERE video_id = ? AND id LIKE 'sim%' ORDER BY created_at DESC LIMIT 3").all(v.id) as { id: string; author_name: string | null }[]) : [];
 
     // Velocity: an S-curve (slow → peak → die out) like YouTube's browse "For You".
-    // Shorts spike hard then fall off a cliff; long-form ramps slower and lives longer.
+    // Shorts are pushed in stages (test cohort → wider waves); long-form ramps slower and lives longer.
     // Videos older than 30 days stop being pushed at all.
-    const halfLife = short ? 4 : 24;
     const ramp = ageHours < 2 ? 0.65 + (ageHours / 2) * 0.5 : 1; // slow start
-    const decay = Math.pow(0.5, Math.max(0, ageHours - 2) / halfLife);
     const ageCut = ageHours > 720 ? 0.02 : 1; // nothing older than 30 days gets push
-    let velocity = (short ? 5 : 2.4) * (0.35 + q * 0.75) * ramp * decay * rand(0.55, 1.45) * ageCut;
-    velocity += (v.subs / 350_000) * decay * Math.random() * ageCut;
-    if (v.subs < 1000) velocity += 3 * decay * ageCut;
+    let velocity: number;
+    if (short) {
+      const wave = shortWave(v.id, v.likes, v.views, now);
+      velocity = wave * (0.55 + q * 0.7) * ramp * rand(0.6, 1.4) * ageCut;
+      velocity += (v.subs / 350_000) * Math.random() * ageCut * 0.5;
+      if (v.subs < 1000) velocity += 3 * ageCut;
+    } else {
+      const decay = Math.pow(0.5, Math.max(0, ageHours - 2) / 24);
+      velocity = 2.4 * (0.35 + q * 0.75) * ramp * decay * rand(0.55, 1.45) * ageCut;
+      velocity += (v.subs / 350_000) * decay * Math.random() * ageCut;
+      if (v.subs < 1000) velocity += 3 * decay * ageCut;
+    }
 
     // Viral window: quality Shorts catch far more often (and harder) than anything else —
     // that's the whole point of the format. Long videos pop rarely and age out.
