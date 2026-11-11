@@ -10,6 +10,7 @@ import { Player, type PlayerHandle } from '@/components/player';
 import { Comments, RichText, SubscribeButton } from '@/components/social';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CommentsSheet } from './comments-sheet';
+import { useSwipeMini } from '@/components/swipe-mini';
 import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
 import { setSubscribed, updateSettings } from '@/lib/actions/channels';
 import { rateVideo, recordView } from '@/lib/actions/videos';
@@ -135,6 +136,13 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   };
   const topComment = comments.filter((c) => !c.parentId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.likes - a.likes)[0];
   const owner = { id: v.channel.id, handle: v.channel.handle, name: v.channel.name, avatar: v.channel.avatar };
+  // YouTube-style swipe down on the player/title area to collapse into the mini player.
+  const minimize = (t?: number, playing?: boolean) => {
+    const el = player.current?.video;
+    app.setMini({ videoId: v.id, title: v.title, channelName: v.channel.name, src: v.src, captions: v.captions, duration: v.duration, time: t ?? el?.currentTime ?? time.current, playing: playing ?? (el ? !el.paused : false) });
+    router.push('/');
+  };
+  const miniGesture = useSwipeMini({ enabled: mobile, target: () => player.current?.root ?? null, onDismiss: minimize });
 
   // Seeking from the description sheet also closes the sheet; on desktop it just seeks.
   const seeker = (t: number) => { seek(t); if (mobile && descOpen) setDescOpen(false); };
@@ -166,7 +174,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
 
   return (
     <div className={`watch ${theater && !mobile ? 'theater' : ''}`}>
-      <div className="watch-primary">
+      <div className="watch-primary" {...miniGesture}>
         {/* Ambient glow from the video's thumbnail — YouTube's ambient backdrop on phones */}
         <img className="watch-ambient" src={v.thumbnail} alt="" aria-hidden="true" loading="lazy" decoding="async" />
         <div className="watch-player">
@@ -174,7 +182,8 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             autoplayNext={autoplay}
             onAutoplayNext={(on) => { setAutoplay(on); if (app.me) void updateSettings({ autoplay: on }); }}
             onTheater={() => { const t = !theater; setTheater(t); try { localStorage.setItem('vidora-theater', t ? '1' : '0'); } catch { /* storage blocked */ } }}
-            onMini={(t, playing) => { app.setMini({ videoId: v.id, title: v.title, channelName: v.channel.name, src: v.src, captions: v.captions, duration: v.duration, time: t, playing }); router.push('/'); }}
+            onMini={minimize}
+
             onNext={nextHref ? goNext : undefined}
             onTime={(t) => onTimeTick(t)}
             onEnded={() => { if (!autoplay || clip) return; if (next) setEnded(true); else if (nextHref) goNext(); }} />

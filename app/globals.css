@@ -1799,3 +1799,10 @@ a.earn-pill.link:hover { filter: brightness(1.15); }
   .p-btn { width: 40px; height: 40px; }
   .p-row { height: 40px; }
 }
+
+
+/* Phone: the swipe-down-to-mini gesture starts on the video surface and the info block — don't let the browser hijack the pan */
+@media (max-width: 791px) {
+  .p-surface { touch-action: none; }
+  .watch-info { touch-action: none; }
+}

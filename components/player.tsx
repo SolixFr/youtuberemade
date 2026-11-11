@@ -17,6 +17,8 @@ export interface PlayerVideo {
 
 export interface PlayerHandle {
   video: HTMLVideoElement | null;
+  /** The player root element — used by the drag-to-mini gesture. */
+  root: HTMLDivElement | null;
   seek: (t: number) => void;
   play: () => void;
 }
@@ -83,6 +85,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
 
   useImperativeHandle(ref, () => ({
     video: video.current,
+    root: root.current,
     seek: (s) => { if (video.current) video.current.currentTime = s; },
     play: () => { video.current?.play().catch(() => {}); },
   }), []);
@@ -266,15 +269,23 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   };
 
   /* ---- touch gestures: double-tap seek, press-and-hold 2x ---- */
+  const downAt = useRef({ x: 0, y: 0 });
   const onSurfaceDown = (e: RPointerEvent) => {
     lastPointer.current = e.pointerType;
     if (e.button !== 0) return;
+    downAt.current = { x: e.clientX, y: e.clientY };
     holdTimer.current = setTimeout(() => {
       const el = video.current;
       if (!el || el.paused) return;
       el.playbackRate = 2;
       setFast(true);
     }, 450);
+  };
+  const onSurfaceMove = (e: RPointerEvent) => {
+    // Vertical drags are the swipe-to-mini gesture — don't arm the hold-to-2x timer for those.
+    const dy = Math.abs(e.clientY - downAt.current.y);
+    const dx = Math.abs(e.clientX - downAt.current.x);
+    if (dy > 12 && dy > dx) clearTimeout(holdTimer.current);
   };
   const onSurfaceUp = (e: RPointerEvent) => {
     clearTimeout(holdTimer.current);
@@ -373,7 +384,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           </video>
         )}
         {src && wantPreview && <video ref={previewVideo} src={src} muted preload="metadata" className="preview-src" onSeeked={drawPreview} aria-hidden="true" />}
-        <div className="p-surface" onPointerDown={onSurfaceDown} onPointerUp={onSurfaceUp} onDoubleClick={() => lastPointer.current !== 'touch' && !compact && toggleFs()} />
+        <div className="p-surface" onPointerDown={onSurfaceDown} onPointerMove={onSurfaceMove} onPointerUp={onSurfaceUp} onDoubleClick={() => lastPointer.current !== 'touch' && !compact && toggleFs()} />
         {fast && <div className="p-fast">2x <Icon name="fast_forward" filled size={18} /></div>}
         {flash && <div key={flash.key} className="p-flash"><Icon name={flash.icon} filled size={36} /></div>}
         {seekHint && <div key={seekHint.key} className={`p-seek ${seekHint.side}`}><Icon name={seekHint.side === 'l' ? 'fast_rewind' : 'fast_forward'} filled />10 seconds</div>}
