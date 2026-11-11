@@ -1825,19 +1825,28 @@ a.earn-pill.link:hover { filter: brightness(1.15); }
 
 
 /* Post analytics panel (post page, owner only) */
-.post-analytics { border: 1px solid var(--divider); border-radius: 12px; background: var(--bg-raised); padding: 18px; margin-top: 18px; }
-.post-analytics h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+.post-analytics { border: 1px solid var(--divider); border-radius: 16px; background: var(--bg-raised); padding: 16px 18px 18px; margin-top: 16px; }
+.pa-title { font-size: 11px; font-weight: 600; letter-spacing: 1.1px; text-transform: uppercase; color: var(--text-2); margin: 0 0 12px; }
 .pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.pa-stat { background: var(--tonal); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
-.pa-stat b { font-size: 22px; font-weight: 500; letter-spacing: -0.2px; }
-.pa-stat span { font-size: 12px; color: var(--text-2); }
+.pa-stat { position: relative; background: var(--tonal); border-radius: 12px; padding: 12px 12px 13px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pa-stat-icon { position: absolute; top: 10px; right: 10px; color: var(--text-2); opacity: 0.85; }
+.pa-stat-value { font-size: 24px; line-height: 1.15; font-weight: 500; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+.pa-stat-label { font-size: 11px; font-weight: 500; color: var(--text-2); }
 .pa-poll { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
-.pa-poll h3 { font-size: 13px; margin: 0; color: var(--text-2); font-weight: 500; }
-.pa-option-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
-.pa-option-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pa-bar { height: 8px; border-radius: 4px; background: var(--tonal); overflow: hidden; margin-top: 4px; }
-.pa-fill { height: 100%; background: var(--blue); border-radius: 4px; }
-@media (max-width: 640px) { .pa-stats { grid-template-columns: repeat(2, 1fr); } }
+.pa-poll-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pa-poll-head h3 { font-size: 12px; margin: 0; color: var(--text-2); font-weight: 500; letter-spacing: 0.2px; }
+.pa-winner { font-size: 12px; font-weight: 600; color: var(--blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.pa-split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--tonal); }
+.pa-seg { background: var(--tonal-hover); }
+.pa-seg.win { background: var(--blue); }
+.pa-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pa-legend li { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.pa-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tonal-hover); flex-shrink: 0; }
+.pa-dot.win { background: var(--blue); }
+.pa-legend-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.pa-legend-nums { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pa-legend-nums b { color: var(--text); font-weight: 500; }
+@media (max-width: 640px) { .pa-stats { grid-template-columns: repeat(2, 1fr); } .pa-stat-value { font-size: 22px; } }
 
 /* ============ Studio: Channel analytics (YouTube Studio parity) ============ */
 .am-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
