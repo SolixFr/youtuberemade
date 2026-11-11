@@ -121,7 +121,7 @@ export function AdminVideosTable({ videos }: { videos: AdminVideo[] }) {
 }
 
 export interface AdminReport {
-  id: string; kind: 'video' | 'comment' | 'channel'; target_id: string; reason: string;
+  id: string; kind: 'video' | 'comment' | 'channel' | 'post'; target_id: string; reason: string;
   resolved: number; created_at: number; reporter: string | null;
   video_id?: string | null; ch_handle?: string | null;
 }
@@ -136,6 +136,7 @@ export function AdminReportsTable({ reports }: { reports: AdminReport[] }) {
   };
   const href = (r: AdminReport) => r.kind === 'video' ? `/watch?v=${r.target_id}`
     : r.kind === 'comment' ? (r.video_id ? `/watch?v=${r.video_id}` : undefined)
+    : r.kind === 'post' ? `/post/${r.target_id}`
       : r.ch_handle ? `/${r.ch_handle}` : undefined;
   return (
     <div className="table-wrap">

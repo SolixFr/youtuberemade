@@ -258,6 +258,7 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
   const [p, setP] = useState(initial);
   const [confirm, setConfirm] = useState(false);
   const [gone, setGone] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   // Poll the server for fresh like/poll/comment counts while the tab is visible.
   useEffect(() => {
     const t = setInterval(() => {
@@ -297,11 +298,22 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
     const r = await votePoll(p.id, p.myVote === idx ? null : idx);
     if (r.ok) setP(r.data); else toast(r.error);
   });
+  const copyLink = () => {
+    const url = `${window.location.origin}/post/${p.id}`;
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(() => toast('Link copied'), () => toast('Couldn’t copy'));
+    else toast('Couldn’t copy');
+  };
+  const postMenuItems = [
+    { icon: 'link', label: 'Copy link', onSelect: copyLink },
+    ...(app.me?.id === p.channel.id
+      ? [{ icon: 'delete', label: 'Delete post', onSelect: () => setConfirm(true) }]
+      : [{ icon: 'flag', label: 'Report post', onSelect: () => app.open({ kind: 'report', what: 'post', targetId: p.id }) }]),
+  ];
   return (
     <article className="post">
       <Link href={`/${p.channel.handle}`}><Avatar channel={p.channel} size={40} /></Link>
       <div className="post-body">
-        <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><Link href={`/post/${p.id}`} className="muted"><Ago ts={p.createdAt} /></Link>{p.membersOnly && <span className="members-pill"><Icon name="loyalty" size={14} />Members only</span>}</div>
+        <div className="post-who"><Link href={`/${p.channel.handle}`}><b>{p.channel.name}</b></Link><Link href={`/post/${p.id}`} className="muted"><Ago ts={p.createdAt} /></Link>{p.membersOnly && <span className="members-pill"><Icon name="loyalty" size={14} />Members only</span>}<span className="grow" /><IconButton icon="more_vert" label="More actions" size={36} onClick={(e) => setMenuAnchor(e.currentTarget)} />{menuAnchor && <Menu anchor={menuAnchor} onClose={() => setMenuAnchor(null)} items={postMenuItems} />}</div>
         {p.text && <p className="post-text"><RichText text={p.text} /></p>}
         {p.image && <div className="post-image"><img src={p.image} alt="" loading="lazy" decoding="async" /></div>}
         {p.video && (
@@ -332,7 +344,6 @@ export function PostCard({ post: initial, onDeleted }: { post: Post; onDeleted?:
           <Link href={`/post/${p.id}`} className="icon-btn" aria-label="Comments" data-tooltip="Comments"><Icon name="comment" /></Link>
           <span>{p.comments || ''}</span>
           <IconButton icon="share" label="Share" onClick={() => app.open({ kind: 'share', title: `Post by ${p.channel.name}`, path: `/post/${p.id}` })} />
-          {app.me?.id === p.channel.id && <IconButton icon="delete" label="Delete post" onClick={() => setConfirm(true)} />}
         </div>
       </div>
       {confirm && <ConfirmDialog title="Delete post?" text="This post will be removed from your channel." onClose={() => setConfirm(false)} onConfirm={async () => {

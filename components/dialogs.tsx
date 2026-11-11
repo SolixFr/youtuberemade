@@ -99,7 +99,7 @@ function ReportDialog({ what, targetId, onClose }: { what: string; targetId: str
   const [sent, setSent] = useState(false);
   const submit = async (close: () => void) => {
     if (!reason) return;
-    const r = await submitReport(what as 'video' | 'comment' | 'channel', targetId, reason);
+    const r = await submitReport(what as 'video' | 'comment' | 'channel' | 'post', targetId, reason);
     if (!r.ok) return toast(r.error);
     setSent(true);
   };

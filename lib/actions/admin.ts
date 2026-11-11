@@ -76,13 +76,13 @@ export async function deleteVideoAdmin(videoId: string) {
   });
 }
 
-export async function submitReport(kind: 'video' | 'comment' | 'channel', targetId: string, reason: string) {
+export async function submitReport(kind: 'video' | 'comment' | 'channel' | 'post', targetId: string, reason: string) {
   return run(async () => {
     const me = await getMe();
     const r = text(reason, 'Reason', { max: 200 });
     if (!r) throw new Invalid('Pick a reason');
     sql('INSERT INTO reports (id, reporter_id, kind, target_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(newId('rp'), me?.id ?? null, oneOf(kind, ['video', 'comment', 'channel'], 'Report type'), id(targetId), r, Date.now());
+      .run(newId('rp'), me?.id ?? null, oneOf(kind, ['video', 'comment', 'channel', 'post'], 'Report type'), id(targetId), r, Date.now());
     return null;
   });
 }
@@ -94,7 +94,7 @@ export async function adminReports() {
         (SELECT c.video_id FROM comments c WHERE c.id = r.target_id AND r.kind = 'comment') video_id,
         (SELECT t.handle FROM users t WHERE t.id = r.target_id AND r.kind = 'channel') ch_handle
       FROM reports r LEFT JOIN users u ON u.id = r.reporter_id ORDER BY r.resolved, r.created_at DESC LIMIT 200`).all() as
-      { id: string; kind: 'video' | 'comment' | 'channel'; target_id: string; reason: string; resolved: number; created_at: number; reporter: string | null; video_id: string | null; ch_handle: string | null }[];
+      { id: string; kind: 'video' | 'comment' | 'channel' | 'post'; target_id: string; reason: string; resolved: number; created_at: number; reporter: string | null; video_id: string | null; ch_handle: string | null }[];
   });
 }
 
