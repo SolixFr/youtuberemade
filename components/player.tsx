@@ -287,7 +287,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   };
   const scrub = (e: RPointerEvent<HTMLDivElement>) => {
     const el = video.current;
-    if (!el || !dur) return;
+    if (!el || !Number.isFinite(dur) || dur <= 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const move = (x: number) => { el.currentTime = fracAt(x) * dur; setT(el.currentTime); };
     move(e.clientX);
@@ -421,7 +421,11 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             onPlay={() => { setPaused(false); lastTick.current = performance.now(); poke(); }}
             onPause={(e) => { setPaused(true); flushWatch(e.currentTarget.currentTime); lastTick.current = null; }}
             onTimeUpdate={onTimeUpdate}
-            onDurationChange={(e) => setDur(e.currentTarget.duration)}
+            onDurationChange={(e) => {
+              // MediaRecorder uploads can report Infinity/NaN here — keep the known-good duration.
+              const d = e.currentTarget.duration;
+              if (Number.isFinite(d) && d > 0) setDur(d);
+            }}
             onEnded={() => { flushWatch(0); onEnded?.(); }}
             onVolumeChange={(e) => { setVolume(e.currentTarget.volume); setMuted(e.currentTarget.muted); }}>
             {captionsUrl && <track kind="subtitles" src={captionsUrl} srcLang="en" label="English" default={captions} />}
@@ -481,7 +485,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 const buf = Math.max(0, Math.min(1, (buffered - s.start) / len));
                 const hov = hoverX !== null ? Math.max(0, Math.min(1, (hoverTime - s.start) / len)) : 0;
                 return (
-                  <div key={s.start} className="p-seg" style={{ flexGrow: len }}>
+                  <div key={s.start} className="p-seg" style={{ flexGrow: Math.min(1e6, Math.max(0.0001, s.end - s.start)) }}>
                     <div className="p-buffer" style={{ width: `${buf * 100}%` }} />
                     <div className="p-hover" style={{ width: `${hov * 100}%` }} />
                     <div className="p-fill" style={{ width: `${fill * 100}%` }} />
