@@ -127,7 +127,7 @@ img { display: block; }
 
 /* ============ Buttons - Vidora flat styles + the pasted depth treatment ============ */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border: none; border-radius: 14px; background: var(--tonal); box-shadow: var(--btn-shadow); font-size: 14px; font-weight: 500; color: var(--text); white-space: nowrap; flex-shrink: 0; cursor: pointer; user-select: none; transition: background-color 0.1s, filter 150ms ease, box-shadow 150ms ease, scale 200ms ease-out; }
-.btn:hover:not(:disabled) { background: var(--tonal-hover); filter: brightness(1.08); scale: 1.02; }
+.btn:hover:not(:disabled) { background: var(--tonal-hover); filter: brightness(1.08); }
 .btn:active:not(:disabled) { scale: .98; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-md { height: 36px; padding: 0 16px; font-size: 14px; }
@@ -150,7 +150,7 @@ img { display: block; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.full { width: 100%; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; flex-shrink: 0; position: relative; color: inherit; background: transparent; box-shadow: var(--btn-shadow); cursor: pointer; transition: background-color 0.1s, filter 150ms ease, box-shadow 150ms ease, scale 200ms ease-out; }
-.icon-btn:hover:not(:disabled) { background: var(--hover); scale: 1.06; }
+.icon-btn:hover:not(:disabled) { background: var(--hover); }
 .icon-btn:active:not(:disabled) { background: var(--tonal-hover); scale: .95; }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -1002,7 +1002,7 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
 .theater-chat-feed { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; font-size: 13px; }
 @media (max-width: 900px) { .live-theater { grid-template-columns: 1fr; } .theater-chat { max-height: none; } }
 .btn-live { background: #cc0000; color: #fff; border: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; box-shadow: var(--btn-shadow); }
-.btn-live:hover { filter: brightness(1.18); scale: 1.02; }
+.btn-live:hover { filter: brightness(1.18); }
 .tab-live { display: inline-flex; align-items: center; gap: 7px; color: #ff0033; font-weight: 600; }
 .live-tab-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff0033; animation: live-blink 1.1s ease-in-out infinite; }
 .thumb-live { position: absolute; bottom: 8px; right: 8px; background: #cc0000; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 1px; border-radius: 4px; padding: 2px 8px; }
