@@ -9,7 +9,7 @@ import { Thumbnail } from '@/components/cards';
 import { Player } from '@/components/player';
 import { drawStreamCard } from '@/components/stream-card';
 import { posClasses } from '@/components/stories';
-import { Avatar, Button, ConfirmDialog, Dialog, Field, Icon, IconButton, useToast } from '@/components/ui';
+import { Avatar, Button, ConfirmDialog, Dialog, Dropdown, Field, Icon, IconButton, useToast, VISIBILITY_ITEMS } from '@/components/ui';
 import { probeVideo } from '@/components/upload';
 import { submitReport } from '@/lib/actions/admin';
 import { updateChannel } from '@/lib/actions/channels';
@@ -146,7 +146,7 @@ export function EditVideo({ video: v }: { video: Video }) {
         <aside>
           <Player video={v} autoplay={false} compact />
           <Field label="Visibility">
-            <select value={vis} onChange={(e) => setVis(e.target.value as Visibility)}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select>
+            <Dropdown value={vis} onChange={setVis} items={VISIBILITY_ITEMS} label="Visibility" />
           </Field>
           <p className="muted small">{formatDuration(v.duration)} · {v.type === 'short' ? 'Short' : 'Video'} · {formatDate(v.publishedAt)}</p>
         </aside>
@@ -566,10 +566,9 @@ export function Customize({ channel, config }: { channel: Channel; config: Custo
               ) : (
                 videos.length ? (
                   <Field label="Channel trailer">
-                    <select value="" onChange={(e) => e.target.value && setTrailer(e.target.value)} aria-label="Choose a channel trailer">
-                      <option value="">None — show your most popular video</option>
-                      {videos.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-                    </select>
+                    <Dropdown value="" onChange={(id) => setTrailer(id)} align="left"
+                      label="Choose a channel trailer" placeholder="None — show your most popular video"
+                      items={videos.map((v) => ({ id: v.id, label: v.title }))} />
                   </Field>
                 ) : <p className="muted small">Publish a public video first — then pick one as your trailer.</p>
               )}
@@ -589,10 +588,9 @@ export function Customize({ channel, config }: { channel: Channel; config: Custo
               ) : (
                 videos.length ? (
                   <Field label="Featured video">
-                    <select value="" onChange={(e) => e.target.value && setFeatured(e.target.value)} aria-label="Choose a featured video">
-                      <option value="">None — show your most popular video</option>
-                      {videos.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-                    </select>
+                    <Dropdown value="" onChange={(id) => setFeatured(id)} align="left"
+                      label="Choose a featured video" placeholder="None — show your most popular video"
+                      items={videos.map((v) => ({ id: v.id, label: v.title }))} />
                   </Field>
                 ) : <p className="muted small">Publish a public video first — then pick one to feature.</p>
               )}
@@ -620,17 +618,12 @@ export function Customize({ channel, config }: { channel: Channel; config: Custo
                     ? 'Everything you can add is already on your homepage.'
                     : undefined
                 }>
-                  <select value="" onChange={(e) => { const k = e.target.value as SectionKind; if (k) setSections((s) => [...s, k]); }} aria-label="Add a section">
-                    <option value="">Choose a section to add…</option>
-                    <optgroup label="Sections">
-                      {SECTION_KINDS.filter(([k]) => !sections.includes(k)).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                    </optgroup>
-                    {playlists.some((p) => !sections.includes(`playlist:${p.id}`)) && (
-                      <optgroup label="Single playlists">
-                        {playlists.filter((p) => !sections.includes(`playlist:${p.id}`)).map((p) => <option key={p.id} value={`playlist:${p.id}`}>Single playlist: {p.title} ({p.count})</option>)}
-                      </optgroup>
-                    )}
-                  </select>
+                  <Dropdown value="" onChange={(k) => setSections((s) => [...s, k as SectionKind])}
+                    label="Add a section" placeholder="Choose a section to add…"
+                    items={[
+                      ...SECTION_KINDS.filter(([k]) => !sections.includes(k)).map(([k, label]) => ({ id: k as string, label })),
+                      ...playlists.filter((p) => !sections.includes(`playlist:${p.id}`)).map((p) => ({ id: `playlist:${p.id}`, label: `Single playlist: ${p.title} (${p.count})` })),
+                    ]} />
                 </Field>
               ) : <p className="muted small">{MAX_SECTIONS} sections — the maximum. Remove one to add another.</p>}
             </section>

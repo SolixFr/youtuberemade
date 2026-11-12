@@ -3,11 +3,27 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { applyTheme } from '@/components/chrome';
-import { Button, Switch, useToast } from '@/components/ui';
+import { Button, Dropdown, Switch, useToast } from '@/components/ui';
 import { signOut } from '@/lib/actions/auth';
 import { formatCount } from '@/lib/format';
 import { setBell, updateSettings } from '@/lib/actions/channels';
 import type { BellLevel, Me, MessagePolicy, Theme } from '@/lib/types';
+
+const BELL_ITEMS: { id: BellLevel; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'personalized', label: 'Personalized' },
+  { id: 'none', label: 'None' },
+];
+
+function BellSelect({ channel }: { channel: { id: string; name: string; bell: BellLevel } }) {
+  const toast = useToast();
+  const [bell, setBellState] = useState<BellLevel>(channel.bell);
+  return (
+    <Dropdown className="bell-dd" value={bell} label={`Notifications from ${channel.name}`} align="right"
+      items={BELL_ITEMS}
+      onChange={(v) => { setBellState(v); void setBell(channel.id, v); toast('Saved'); }} />
+  );
+}
 
 export function SettingsView({ me, subscriptions }: { me: Me; subscriptions: { id: string; name: string; bell: BellLevel }[] }) {
   const toast = useToast();
@@ -58,9 +74,7 @@ export function SettingsView({ me, subscriptions }: { me: Me; subscriptions: { i
         {subscriptions.length === 0 && <p className="muted">You’re not subscribed to any channels yet.</p>}
         {subscriptions.map((c) => (
           <div key={c.id} className="settings-row"><span>{c.name}</span>
-            <select className="input" defaultValue={c.bell} onChange={(e) => { void setBell(c.id, e.target.value as BellLevel); toast('Saved'); }} aria-label={`Notifications from ${c.name}`}>
-              <option value="all">All</option><option value="personalized">Personalized</option><option value="none">None</option>
-            </select>
+            <BellSelect channel={c} />
           </div>
         ))}
       </section>

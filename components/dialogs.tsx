@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,7 +8,7 @@ import { createPlaylist, getPlaylistMembership, setInPlaylist } from '@/lib/acti
 import { formatDuration } from '@/lib/format';
 import type { Visibility } from '@/lib/types';
 import { useApp, type DialogState } from './app-context';
-import { Button, Dialog, Field, Icon, Spinner, useToast } from './ui';
+import { Button, Dialog, Dropdown, Field, Icon, Spinner, useToast, VISIBILITY_ITEMS } from './ui';
 
 const absolute = (path: string) => new URL(path, window.location.origin).toString();
 
@@ -25,7 +25,7 @@ function ShareDialog({ title, path, startAt, onClose }: { title: string; path: s
     { name: 'Reddit', icon: 'forum', href: `https://www.reddit.com/submit?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}` },
     { name: 'WhatsApp', icon: 'chat', href: `https://wa.me/?text=${encodeURIComponent(`${title} ${link}`)}` },
   ];
-  const copy = () => navigator.clipboard.writeText(value).then(() => toast('Link copied to clipboard'), () => toast('Couldn’t copy. Select the link and copy it manually.'));
+  const copy = () => navigator.clipboard.writeText(value).then(() => toast('Link copied to clipboard'), () => toast('Couldnâ€™t copy. Select the link and copy it manually.'));
   return (
     <Dialog title="Share" onClose={onClose} width={520}>
       <div className="share-targets">
@@ -64,7 +64,7 @@ function SaveDialog({ videoId, onClose }: { videoId: string; onClose: () => void
   };
   const visIcon = (v: Visibility) => (v === 'public' ? 'public' : v === 'unlisted' ? 'link' : 'lock');
   return (
-    <Dialog title="Save video to…" onClose={onClose} width={340}>
+    <Dialog title="Save video toâ€¦" onClose={onClose} width={340}>
       {(close) => !state ? <div className="center-pad"><Spinner /></div> : (
         <>
           <label className="check-row"><input type="checkbox" checked={state.watchLater} onChange={(e) => toggle('WL', 'Watch later', e.target.checked)} /><span className="grow">Watch later</span><Icon name="lock" size={18} /></label>
@@ -79,9 +79,9 @@ function SaveDialog({ videoId, onClose }: { videoId: string; onClose: () => void
               toast(`Saved to ${name.trim()}`);
               close();
             }}>
-              <Field label="Name" count={`${name.length}/150`}><input autoFocus maxLength={150} value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter playlist name…" /></Field>
+              <Field label="Name" count={`${name.length}/150`}><input autoFocus maxLength={150} value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter playlist nameâ€¦" /></Field>
               <Field label="Visibility">
-                <select value={vis} onChange={(e) => setVis(e.target.value as Visibility)}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select>
+                 <Dropdown value={vis} onChange={setVis} items={VISIBILITY_ITEMS} label="Visibility" />
               </Field>
               <div className="row-end"><Button variant="text" onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" variant="text" className="text-blue" disabled={!name.trim()}>Create</Button></div>
             </form>
@@ -106,7 +106,7 @@ function ReportDialog({ what, targetId, onClose }: { what: string; targetId: str
   if (sent) {
     return (
       <Dialog title="Report received" onClose={onClose} width={420} footer={(close) => <Button variant="text" className="text-blue" onClick={close}>Close</Button>}>
-        <p className="muted">Thanks — an admin will review it. Reports are queued in the admin panel.</p>
+        <p className="muted">Thanks â€” an admin will review it. Reports are queued in the admin panel.</p>
       </Dialog>
     );
   }
@@ -119,9 +119,9 @@ function ReportDialog({ what, targetId, onClose }: { what: string; targetId: str
 }
 
 const SHORTCUTS: [string, string][] = [
-  ['Play / pause', 'k'], ['Rewind 10 seconds', 'j'], ['Forward 10 seconds', 'l'], ['Seek 5 seconds', '← →'],
-  ['Volume (player focused)', '↑ ↓'], ['Mute', 'm'], ['Full screen', 'f'], ['Theater mode', 't'], ['Miniplayer', 'i'],
-  ['Captions', 'c'], ['Seek to 0%–90%', '0–9'], ['Playback speed', '< >'], ['Next video', 'Shift + N'], ['Search', '/'], ['This list', '?'],
+  ['Play / pause', 'k'], ['Rewind 10 seconds', 'j'], ['Forward 10 seconds', 'l'], ['Seek 5 seconds', 'â† â†’'],
+  ['Volume (player focused)', 'â†‘ â†“'], ['Mute', 'm'], ['Full screen', 'f'], ['Theater mode', 't'], ['Miniplayer', 'i'],
+  ['Captions', 'c'], ['Seek to 0%â€“90%', '0â€“9'], ['Playback speed', '< >'], ['Next video', 'Shift + N'], ['Search', '/'], ['This list', '?'],
 ];
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
@@ -140,12 +140,12 @@ function ClipDialog({ videoId, at, duration, title: videoTitle, onClose }: { vid
   return (
     <Dialog title="Create clip" onClose={onClose} width={460}
       footer={(close) => <><Button variant="text" onClick={close}>Cancel</Button><Button variant="blue" disabled={!title.trim() || end - start < 5}
-        onClick={() => app.open({ kind: 'share', title: `${title.trim()} — ${videoTitle}`, path: `/watch?v=${videoId}&clip=${start}-${end}` })}>Share clip</Button></>}>
-      <p className="muted small">The link plays {formatDuration(start)}–{formatDuration(end)} on a loop.</p>
+        onClick={() => app.open({ kind: 'share', title: `${title.trim()} â€” ${videoTitle}`, path: `/watch?v=${videoId}&clip=${start}-${end}` })}>Share clip</Button></>}>
+      <p className="muted small">The link plays {formatDuration(start)}â€“{formatDuration(end)} on a loop.</p>
       <Field label="Title" count={`${title.length}/140`}><input maxLength={140} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a title (required)" /></Field>
       <div className="two-fields">
         <Field label="Start (seconds)"><input type="number" min={0} max={Math.max(0, duration - 5)} value={start} onChange={(e) => setStart(Math.max(0, Number(e.target.value)))} /></Field>
-        <Field label="Length (5–60 s)"><input type="number" min={5} max={60} value={length} onChange={(e) => setLength(Math.max(5, Math.min(60, Number(e.target.value))))} /></Field>
+        <Field label="Length (5â€“60 s)"><input type="number" min={5} max={60} value={length} onChange={(e) => setLength(Math.max(5, Math.min(60, Number(e.target.value))))} /></Field>
       </div>
     </Dialog>
   );

@@ -9,7 +9,7 @@ import { formatDuration, parseChapters } from '@/lib/format';
 import type { Visibility } from '@/lib/types';
 import { uploadFile, type UploadHandle } from '@/lib/upload-client';
 import { useApp } from './app-context';
-import { Avatar, Button, CheckCircleIcon, Dialog, Field, Icon, IconButton, useToast } from './ui';
+import { Avatar, Button, CheckCircleIcon, Dialog, Dropdown, Field, Icon, IconButton, useToast } from './ui';
 
 export const TOPICS = ['Education', 'Science & Technology', 'People & Blogs', 'Film & Animation', 'Music', 'Gaming', 'Travel & Events', 'Earth', 'The Sun', 'Rockets', 'Telescopes & Mars'];
 const MAX_VIDEO = 1024 * 1024 * 1024;
@@ -209,7 +209,8 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
               </div>
               {playlists.length > 0 && (
                 <Field label="Add to playlist">
-                  <select value={playlist} onChange={(e) => setPlaylist(e.target.value)}><option value="">None</option>{playlists.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select>
+                  <Dropdown value={playlist} onChange={setPlaylist} placeholder="None" label="Add to playlist"
+                    items={[{ id: '', label: 'None' }, ...playlists.map((p) => ({ id: p.id, label: p.title }))]} />
                 </Field>
               )}
               <h4>Audience</h4>
@@ -218,7 +219,7 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
               <label className="radio-row"><input type="radio" name="kids" checked={kids === false} onChange={() => setKids(false)} />No, it’s not made for kids</label>
               <h4>Format and category</h4>
               <label className="check-row"><input type="checkbox" checked={asShort} onChange={(e) => setAsShort(e.target.checked)} />Publish as a Short</label>
-              <Field label="Category"><select value={topic} onChange={(e) => setTopic(e.target.value)}>{TOPICS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+              <Field label="Category"><Dropdown value={topic} onChange={setTopic} label="Category" items={TOPICS.map((t) => ({ id: t as string, label: t }))} /></Field>
               <h4>Subtitles</h4>
               <label className="btn btn-tonal btn-sm"><Icon name="closed_caption" size={20} />{captions ? captions.name : 'Upload a .vtt file'}
                 <input type="file" accept=".vtt,text/vtt" hidden onChange={(e) => setCaptions(e.target.files?.[0] ?? null)} />
@@ -330,7 +331,7 @@ export function PostComposer({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {kind === 'video' && (videos.length ? (
-        <Field label="Your video"><select value={videoId} onChange={(e) => setVideoId(e.target.value)}><option value="">Choose a video</option>{videos.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}</select></Field>
+        <Field label="Your video"><Dropdown value={videoId} onChange={setVideoId} label="Your video" placeholder="Choose a video" items={videos.map((v) => ({ id: v.id, label: v.title }))} /></Field>
       ) : <p className="muted">Publish a public video first to attach it.</p>)}
       <div className="composer-kinds">
         {([['image', 'image', 'Image'], ['poll', 'ballot', 'Poll'], ['video', 'smart_display', 'Video']] as const).map(([k, icon, label]) => (

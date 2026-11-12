@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Dialog, Field, useToast } from '@/components/ui';
+import { Button, Dialog, Dropdown, Field, useToast, VISIBILITY_ITEMS } from '@/components/ui';
 import { createPlaylist } from '@/lib/actions/videos';
 import type { Visibility } from '@/lib/types';
 
@@ -25,9 +25,10 @@ export function NewPlaylistButton() {
             router.refresh();
           }}>Create</Button></>}>
           <Field label="Title" count={`${title.length}/150`}><input maxLength={150} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-          <Field label="Visibility"><select value={vis} onChange={(e) => setVis(e.target.value as Visibility)}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></Field>
+          <Field label="Visibility"><Dropdown value={vis} onChange={setVis} items={VISIBILITY_ITEMS} label="Visibility" /></Field>
         </Dialog>
       )}
     </>
   );
 }
+

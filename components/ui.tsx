@@ -6,7 +6,7 @@ import {
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { ChannelLite, StoryState } from '@/lib/types';
+import type { ChannelLite, StoryState, Visibility } from '@/lib/types';
 
 /** Member tier colors, like YouTube's loyalty badge levels. */
 export const MEMBER_TIER_COLORS = ['#9aa0a6', '#3ea6ff', '#2ba640', '#ab47bc', '#ffd600'];
@@ -174,6 +174,53 @@ function useClosing(onClose: () => void) {
     });
   }, []);
   return { closing, close };
+}
+
+/* Shared items for the common visibility dropdown. */
+export const VISIBILITY_ITEMS: DropdownItem<Visibility>[] = [
+  { id: 'public', label: 'Public', icon: 'public' },
+  { id: 'unlisted', label: 'Unlisted', icon: 'link' },
+  { id: 'private', label: 'Private', icon: 'lock' },
+];
+
+/* ---------- Dropdown: styled replacement for <select> ---------- */
+export interface DropdownItem<T extends string = string> {
+  id: T;
+  label: string;
+  icon?: string;
+}
+
+/** Tonal trigger + the standard anchored Menu (bottom sheet on phones). No dead `<select>` chrome. */
+export function Dropdown<T extends string = string>({ items, value, onChange, label, placeholder = 'Select…', className = '', align = 'left', disabled = false }: {
+  items: DropdownItem<T>[];
+  value: T | '';
+  onChange: (id: T) => void;
+  /** Accessible name; shown when `value` doesn't match an item. */
+  label?: string;
+  placeholder?: string;
+  className?: string;
+  align?: 'left' | 'right';
+  disabled?: boolean;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const current = items.find((i) => i.id === value) ?? null;
+  const shown = current?.label ?? (label ?? placeholder);
+  return (
+    <span className={`dd ${className}`}>
+      <button type="button" className={`dd-trigger ${current ? '' : 'empty'} ${anchor ? 'open' : ''}`}
+        aria-haspopup="menu" aria-expanded={anchor !== null} aria-label={label ?? placeholder} disabled={disabled}
+        onClick={(e) => setAnchor((a) => (a ? null : e.currentTarget))}
+        onKeyDown={(e) => { if (e.key === 'ArrowDown' && !anchor) { e.preventDefault(); setAnchor(e.currentTarget); } }}>
+        <span className="dd-label">{shown}</span>
+        <Icon name="expand_more" size={20} className="dd-chevron" />
+      </button>
+      {anchor && (
+        <Menu anchor={anchor} align={align} onClose={() => setAnchor(null)} items={items.map((it) => ({
+          icon: it.icon, label: it.label, checked: it.id === value, onSelect: () => onChange(it.id),
+        }))} />
+      )}
+    </span>
+  );
 }
 
 /* ---------- Menu: anchored popover, bottom sheet on phones ---------- */

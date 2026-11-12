@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Ago } from '@/components/ago';
 import { useApp } from '@/components/app-context';
 import { ChannelName, Thumbnail, VideoMenuButton } from '@/components/cards';
-import { Button, ConfirmDialog, Dialog, EmptyState, Field, Icon, useToast } from '@/components/ui';
+import { Button, ConfirmDialog, Dialog, Dropdown, EmptyState, Field, Icon, useToast, VISIBILITY_ITEMS } from '@/components/ui';
 import { deletePlaylist, removeFromList, updatePlaylist } from '@/lib/actions/videos';
 import {formatCount } from '@/lib/format';
 import type { Video, Visibility } from '@/lib/types';
@@ -44,7 +44,7 @@ export function PlaylistView({ playlist }: { playlist: PlaylistData }) {
           <h1>{playlist.title}</h1>
           <div className="pl-meta">
             <b>{playlist.owner}</b>
-            <span><Icon name={playlist.visibility === 'public' ? 'public' : playlist.visibility === 'unlisted' ? 'link' : 'lock'} size={14} className="inline-icon" /> {playlist.visibility[0].toUpperCase() + playlist.visibility.slice(1)} · {videos.length} video{videos.length === 1 ? '' : 's'}{playlist.updatedAt ? <> · Updated <Ago ts={playlist.updatedAt} /></> : ''}</span>
+            <span><Icon name={playlist.visibility === 'public' ? 'public' : playlist.visibility === 'unlisted' ? 'link' : 'lock'} size={14} className="inline-icon" /> {playlist.visibility[0].toUpperCase() + playlist.visibility.slice(1)} Â· {videos.length} video{videos.length === 1 ? '' : 's'}{playlist.updatedAt ? <> Â· Updated <Ago ts={playlist.updatedAt} /></> : ''}</span>
             {playlist.description && <span>{playlist.description}</span>}
           </div>
           <div className="pl-buttons">
@@ -61,14 +61,14 @@ export function PlaylistView({ playlist }: { playlist: PlaylistData }) {
         </div>
       </aside>
       <div className="main">
-        {!videos.length && <EmptyState icon="playlist_play" title="No videos in this playlist yet" text={playlist.id === 'WL' ? 'Use “Save to Watch later” on any video.' : undefined} />}
+        {!videos.length && <EmptyState icon="playlist_play" title="No videos in this playlist yet" text={playlist.id === 'WL' ? 'Use â€œSave to Watch laterâ€ on any video.' : undefined} />}
         {videos.map((v, i) => (
           <div key={v.id} className="pl-row" onClick={() => router.push(`/watch?v=${v.id}&list=${playlist.id}`)}>
             <span className="idx">{i + 1}</span>
             <Link href={`/watch?v=${v.id}&list=${playlist.id}`} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} actions={false} /></Link>
             <div className="pl-text">
               <h3 className="v-title">{v.title}</h3>
-              <div className="v-sub"><ChannelName channel={v.channel} /> · {formatCount(v.views)} views · <Ago ts={v.publishedAt} /></div>
+              <div className="v-sub"><ChannelName channel={v.channel} /> Â· {formatCount(v.views)} views Â· <Ago ts={v.publishedAt} /></div>
             </div>
             <VideoMenuButton v={v} extra={playlist.editable ? [{ icon: 'delete', label: `Remove from ${playlist.title}`, onSelect: async () => {
               setVideos((x) => x.filter((y) => y.id !== v.id));
@@ -88,11 +88,12 @@ export function PlaylistView({ playlist }: { playlist: PlaylistData }) {
           }}>Save</Button></>}>
           <Field label="Title" count={`${title.length}/150`}><input maxLength={150} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
           <Field label="Description"><textarea rows={3} maxLength={5000} value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
-          <Field label="Visibility"><select value={vis} onChange={(e) => setVis(e.target.value as Visibility)}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></Field>
+          <Field label="Visibility"><Dropdown value={vis} onChange={setVis} items={VISIBILITY_ITEMS} label="Visibility" /></Field>
         </Dialog>
       )}
-      {confirm && <ConfirmDialog title="Delete playlist" text={`Delete “${playlist.title}”? The videos stay available.`} onClose={() => setConfirm(false)}
+      {confirm && <ConfirmDialog title="Delete playlist" text={`Delete â€œ${playlist.title}â€? The videos stay available.`} onClose={() => setConfirm(false)}
         onConfirm={async () => { await deletePlaylist(playlist.id); router.push('/feed/playlists'); router.refresh(); }} />}
     </div>
   );
 }
+
