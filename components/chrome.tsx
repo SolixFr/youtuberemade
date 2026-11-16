@@ -252,8 +252,7 @@ function AccountMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => 
             const r = await switchAccount(a.id);
             if (!r.ok) { toast(r.error); return; }
             onClose();
-            router.push('/');
-            router.refresh();
+            window.location.reload();
           }}>
             <Avatar name={a.name} src={a.avatar} size={44} />
             <span className="account-switch-text"><b>{a.name}</b><small>{a.handle} · {subsLabel(a.subscribers)}</small></span>
