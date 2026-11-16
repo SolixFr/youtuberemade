@@ -293,7 +293,7 @@ export default async function ChannelPage({ params, searchParams }: Props) {
           <Link href={`/${c.handle}/about`} className="ch-desc" scroll={false} aria-label={`About ${c.name}. ${c.description || 'More about this channel'} tap for more.`}>
             <span className="ch-desc-text">{c.description || (mine ? 'Add a channel description in Studio' : 'More about this channel')}</span><span className="ch-desc-more">...more</span>
           </Link>
-          {c.links[0] && <div className="ch-links"><Icon name="link" size={14} /><a href={c.links[0].url} target="_blank" rel="noopener noreferrer nofollow">{c.links[0].url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>{c.links.length > 1 && <span className="muted"> and {c.links.length - 1} more</span>}</div>}
+          {c.links[0] && <div className="ch-links"><Icon name="link" size={16} /><a href={c.links[0].url} target="_blank" rel="noopener noreferrer nofollow">{c.links[0].url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>{c.links.length > 1 && <span className="muted"> and {c.links.length - 1} more</span>}</div>}
           <div className="ch-buttons">
             <SubscribeButton channel={c} initial={subscriptionState(me?.id, c.id)} />
             {!mine && elig.memberships && tiers.length > 0 && <JoinButton channelId={c.id} name={c.name} tiers={tiers} initialMember={membershipState(me?.id, c.id)} avatar={c.avatar} banner={c.banner} />}
