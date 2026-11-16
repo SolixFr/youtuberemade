@@ -11,7 +11,7 @@ import { Comments, RichText, SubscribeButton } from '@/components/social';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CommentsSheet } from './comments-sheet';
 import { useSwipeMini } from '@/components/swipe-mini';
-import { Avatar, Button, Chips, Icon, IconButton, Menu, TouchFeedback, useIsMobile, useToast } from '@/components/ui';
+import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
 import { setSubscribed, updateSettings } from '@/lib/actions/channels';
 import { rateVideo, recordView } from '@/lib/actions/videos';
 import { formatCount, formatDate, formatDuration, parseChapters } from '@/lib/format';
@@ -218,8 +218,8 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
                   <span key={`burst-${likeBurst}`} className="like-burst" aria-hidden="true">{BURST_DOTS.map((d, i) => (
                     <span key={i} className="like-dot" style={{ '--tx': `${d.x}px`, '--ty': `${d.y}px` } as CSSProperties} />
                   ))}</span>
-                )}<span className="count">{formatCount(likes)}</span><TouchFeedback /></button>
-                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /><TouchFeedback /></button>
+                )}<span className="count">{formatCount(likes)}</span></button>
+                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /></button>
               </div>
               <IconButton icon="share" label="Share" size={36} onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
               <IconButton icon="download" label="Download" size={36} onClick={download} />

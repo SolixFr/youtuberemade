@@ -658,12 +658,7 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .seg button .icon { transition: transform 0.1s; }
 @keyframes seg-pop { 0% { transform: scale(0.6); } 55% { transform: scale(1.25); } 100% { transform: scale(1); } }
 
-/* ---------- YouTube touch feedback + like burst ---------- */
-.ytSpecTouchFeedbackShapeHost { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
-.ytSpecTouchFeedbackShapeStroke, .ytSpecTouchFeedbackShapeFill { position: absolute; inset: 0; border-radius: inherit; }
-.ytSpecTouchFeedbackShapeFill { background: currentColor; opacity: 0; }
-.seg button:active .ytSpecTouchFeedbackShapeFill { animation: yt-touch-ripple 0.4s ease-out; }
-@keyframes yt-touch-ripple { 0% { opacity: 0.3; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.8); } }
+/* ---------- YouTube like burst ---------- */
 .like-burst { position: absolute; left: 24px; top: 50%; width: 0; height: 0; overflow: visible; pointer-events: none; }
 .like-dot { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: #ff0033; animation: like-dot-fly 0.55s ease-out forwards; }
 .like-dot:nth-child(3n) { background: #ff2d55; width: 4px; height: 4px; left: -2px; top: -2px; }
