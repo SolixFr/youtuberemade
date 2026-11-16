@@ -23,7 +23,7 @@ export function ChannelLiveHead({ id, name, handle, pronouns, videos, initialSub
   const verified = initialVerified || subs >= 50_000;
   return (
     <>
-      <h1>{name}{verified && <VerifiedBadge size={24} />}</h1>
+      <h1>{name}{verified && <VerifiedBadge size={24} tip={false} />}</h1>
       <div className="ch-line"><b>{handle}</b>{pronouns && <> · {pronouns}</>} · {formatCount(subs)} subscribers · {videos} video{videos === 1 ? '' : 's'}</div>
     </>
   );

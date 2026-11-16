@@ -9,11 +9,12 @@ import type { ChannelLite, Video } from '@/lib/types';
 import { useApp } from './app-context';
 import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
 
-export function VerifiedBadge({ size = 14 }: { size?: number }) {
+export function VerifiedBadge({ size = 14, tip = true }: { size?: number; tip?: boolean }) {
   // Clicking the badge must not navigate (YouTube's verified mark shows a tooltip,
   // name goes to channel). preventDefault blocks the enclosing link.
+  // The channel header badge has no tooltip, like YouTube — everywhere else does.
   return (
-    <span className="verified-badge" data-tooltip="Verified" role="img" aria-label="Verified"
+    <span className="verified-badge" data-tooltip={tip ? 'Verified' : undefined} role="img" aria-label="Verified"
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       <CheckCircleIcon size={size} className="verified" />
     </span>
