@@ -346,6 +346,8 @@ img { display: block; }
 .chip { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--tonal); font-weight: 500; white-space: nowrap; flex-shrink: 0; }
 .chip:hover { background: var(--tonal-hover); }
 .chip.on { background: var(--inverse-bg); color: var(--inverse-fg); }
+.chip:focus { outline: none; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .chips-arrow { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; z-index: 2; }
 .chips-arrow.left { left: 0; padding-right: 32px; background: linear-gradient(to right, var(--bg) 60%, transparent); }
 .chips-arrow.right { right: 0; padding-left: 32px; background: linear-gradient(to left, var(--bg) 60%, transparent); }
@@ -756,7 +758,7 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .channel { max-width: 1284px; margin: 0 auto; padding: 0 24px 48px; }
 .ch-banner { aspect-ratio: 6.2 / 1; border-radius: 16px; overflow: hidden; margin-top: 4px; background: var(--skeleton); }
 .ch-banner img { width: 100%; height: 100%; object-fit: cover; }
-.ch-header { display: flex; gap: 16px; padding: 16px 0; align-items: center; }
+.ch-header { display: flex; gap: 24px; padding: 16px 0; align-items: flex-start; }
 .ch-avatar { flex-shrink: 0; display: inline-flex; position: relative; }
 .ch-live-chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 6px; display: inline-flex; align-items: center; gap: 5px; background: #cc0000; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; border-radius: 4px; padding: 3px 9px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .ch-info h1 { font-size: 36px; line-height: 50px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
