@@ -101,12 +101,21 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
     el.muted = prefs.muted;
     el.playbackRate = prefs.rate;
     const begin = clip?.start ?? (startAt && startAt < v.duration - 5 ? startAt : 0);
-    const onMeta = () => {
-      if (begin) el.currentTime = begin;
-      setDur(el.duration || v.duration);
+    const tryPlay = () => {
       if (autoplay) el.play().catch(() => { el.muted = true; setMuted(true); el.play().catch(() => {}); });
     };
-    el.addEventListener('loadedmetadata', onMeta, { once: true });
+    let metaDone = false;
+    const onMeta = () => {
+      if (metaDone) return;
+      metaDone = true;
+      if (begin) el.currentTime = begin;
+      setDur(el.duration || v.duration);
+    };
+    // The browser can fire loadedmetadata before this effect attaches (cached file,
+    // client-side navigation), which used to leave the video paused forever.
+    if (el.readyState >= 1) onMeta();
+    else el.addEventListener('loadedmetadata', onMeta, { once: true });
+    tryPlay();
     return () => {
       el.removeEventListener('loadedmetadata', onMeta);
       flushWatch(el.ended ? 0 : el.currentTime);
