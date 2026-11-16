@@ -767,8 +767,6 @@ const MILESTONES: Record<number, string> = {
   100_000: 'Six figures',
 };
 
-export interface RecentSub { id: string; handle: string; name: string; avatar: string | null; subscribed_at: number }
-
 export function SubcountPanel({ initial, recent }: { initial: number; recent: RecentSub[] }) {
   const [count, setCount] = useState(initial);
   const [subs, setSubs] = useState<RecentSub[]>(recent);

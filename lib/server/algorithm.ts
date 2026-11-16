@@ -44,6 +44,26 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const chance = (p: number) => Math.random() < p;
 const newId = () => globalThis.crypto.randomUUID().replaceAll('-', '').slice(0, 20);
 
+/** Attribute simulated subscriber gains as genuine subscription rows (capped at
+    2 per call), so Recent subscribers moves with the Live count. Prefers demo
+    viewers who aren't subscribed yet; when the pool is exhausted it refreshes
+    the stalest row instead — the list keeps ticking with zero table growth. */
+function attributeSubs(channelId: string, count: number, now: number) {
+  const want = Math.min(Math.max(0, Math.round(count)), 2);
+  for (let i = 0; i < want; i++) {
+    const fan = sql(`SELECT u.id FROM users u WHERE u.password_hash IS NULL AND u.id != ?
+      AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.channel_id = ?)
+      ORDER BY RANDOM() LIMIT 1`).get(channelId, channelId) as { id: string } | undefined;
+    if (fan) {
+      sql("INSERT INTO subscriptions (user_id, channel_id, bell, created_at) VALUES (?, ?, 'personalized', ?)")
+        .run(fan.id, channelId, now - Math.round(rand(0, 30_000)));
+    } else {
+      sql(`UPDATE subscriptions SET created_at = ? WHERE channel_id = ?
+        AND created_at = (SELECT MIN(created_at) FROM subscriptions WHERE channel_id = ?)`).run(now, channelId, channelId);
+    }
+  }
+}
+
 /** Stable per-video quality (0.3–1.0), hashed from the id so it survives restarts. */
 function qualityOf(id: string) {
   let h = 2166136261;
@@ -167,7 +187,10 @@ function tick() {
     // Shorts convert subscribers harder (that's why they exist).
     const conv = short ? 0.02 + q * 0.05 : 0.004 + q * 0.014;
     const subs = Math.round(views * conv * rand(0.5, 1.2)) + (chance(0.1) ? 1 : 0);
-    if (subs > 0) sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, v.ch_id);
+    if (subs > 0) {
+      sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, v.ch_id);
+      attributeSubs(v.ch_id, subs, now);
+    }
   }
   sql('DELETE FROM view_events WHERE at < ?').run(now - 31 * DAY);
 
@@ -190,6 +213,7 @@ function tick() {
     if (subs > 0) {
       sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, p.channel_id);
       sql('UPDATE posts SET subs_gained = subs_gained + ? WHERE id = ?').run(subs, p.id);
+      attributeSubs(p.channel_id, subs, now);
     }
   }
 
@@ -295,6 +319,7 @@ function tick() {
       sql('UPDATE users SET subscribers = subscribers + ? WHERE id = ?').run(subs, p.channel_id);
       sql('UPDATE posts SET subs_gained = subs_gained + ? WHERE id = ?').run(subs, p.id);
       sql('UPDATE posts SET views = views + ? WHERE id = ?').run(Math.round(velocity * rand(0.6, 1.4)), p.id);
+      attributeSubs(p.channel_id, subs, now);
     }
 
     const likes = Math.round(velocity * (0.02 + q * 0.06) * rand(0.4, 1.2));
@@ -329,7 +354,10 @@ function tick() {
     sql('UPDATE stories SET views = views + ? WHERE id = ?').run(views, s.id);
     storyViewsTotal += views;
     if (chance(0.07)) sql('UPDATE stories SET likes = likes + 1 WHERE id = ?').run(s.id);
-    if (chance(0.05)) sql('UPDATE users SET subscribers = subscribers + 1 WHERE id = ?').run(s.ch_id);
+    if (chance(0.05)) {
+      sql('UPDATE users SET subscribers = subscribers + 1 WHERE id = ?').run(s.ch_id);
+      attributeSubs(s.ch_id, 1, now);
+    }
   }
   // Watch hours: the tick's video seconds plus an estimate for story views (~5s each).
   for (const [chId, seconds] of watchByChannel) {
