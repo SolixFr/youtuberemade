@@ -518,6 +518,7 @@ img { display: block; }
 .input { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color-scheme: inherit; }
 .line-input { width: 100%; border: 0; border-bottom: 1px solid var(--divider); background: none; outline: 0; padding: 4px 0; resize: none; overflow: hidden; font-size: 14px; line-height: 20px; }
 .line-input:focus { border-bottom: 2px solid var(--text); padding-bottom: 3px; }
+.line-input:focus-visible { outline: none; }
 .check-row, .radio-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; cursor: pointer; }
 .check-row input, .radio-row input { width: 20px; height: 20px; accent-color: var(--blue); margin: 0; flex-shrink: 0; }
 .radio-row { align-items: flex-start; }
