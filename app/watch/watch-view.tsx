@@ -221,11 +221,11 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
                 )}<span className="count">{formatCount(likes)}</span><TouchFeedback /></button>
                 <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /><TouchFeedback /></button>
               </div>
-              <IconButton icon="share" label="Share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
-              <IconButton icon="download" label="Download" onClick={download} />
-              <IconButton icon="content_cut" label="Clip" onClick={() => app.open({ kind: 'clip', videoId: v.id, at: time.current, duration: v.duration, title: v.title })} />
-              <IconButton icon="playlist_add" label="Save" onClick={() => app.requireAuth('Sign in to save this video', () => app.open({ kind: 'save', videoId: v.id }))} />
-              <IconButton icon="more_horiz" label="More actions" onClick={(e) => setMoreAnchor(e.currentTarget)} />
+              <IconButton icon="share" label="Share" size={36} onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
+              <IconButton icon="download" label="Download" size={36} onClick={download} />
+              <IconButton icon="content_cut" label="Clip" size={36} onClick={() => app.open({ kind: 'clip', videoId: v.id, at: time.current, duration: v.duration, title: v.title })} />
+              <IconButton icon="playlist_add" label="Save" size={36} onClick={() => app.requireAuth('Sign in to save this video', () => app.open({ kind: 'save', videoId: v.id }))} />
+              <IconButton icon="more_horiz" label="More actions" size={36} onClick={(e) => setMoreAnchor(e.currentTarget)} />
             </div>
           </div>
           {!mobile && description}
