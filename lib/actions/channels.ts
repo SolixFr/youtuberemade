@@ -34,6 +34,15 @@ export async function setBell(channelId: string, bell: BellLevel) {
   });
 }
 
+/** Public subscriber count + verified state for live badges. No auth needed — counts are public. */
+export async function channelSubs(channelId: string) {
+  return run(async () => {
+    const r = sql('SELECT subscribers, verified FROM users WHERE id = ?').get(String(channelId)) as { subscribers: number; verified: number } | undefined;
+    if (!r) throw new Invalid('Channel not found');
+    return { subscribers: r.subscribers, verified: !!r.verified || r.subscribers >= 50_000 };
+  });
+}
+
 import { sanitizeSections } from '@/lib/server/queries';
 
 export async function updateChannel(input: { name: string; handle: string; description: string; links: string; pronouns?: string; avatar?: string | null; banner?: string | null; subscribers?: number; contactEmail?: string; trailerVideoId?: string | null; featuredVideoId?: string | null; watermark?: string | null; watermarkDisplay?: 'end' | 'custom' | 'full'; watermarkStart?: number; homeSections?: string[] }) {

@@ -198,9 +198,9 @@ export function subscriptionState(viewer: string | null | undefined, channelId: 
 }
 
 /* ---------------- comments ---------------- */
-interface CommentRow { id: string; video_id: string; parent_id: string | null; author_id: string | null; author_name: string | null; text: string; likes: number; pinned: number; hearted: number; edited: number; created_at: number; a_handle: string | null; a_name: string | null; a_avatar: string | null; a_verified: number | null; owner: string; my_vote: number | null; member_tier: number | null; member_name: string | null }
+interface CommentRow { id: string; video_id: string; parent_id: string | null; author_id: string | null; author_name: string | null; text: string; likes: number; pinned: number; hearted: number; edited: number; created_at: number; a_handle: string | null; a_name: string | null; a_avatar: string | null; a_verified: number | null; a_subs: number | null; owner: string; my_vote: number | null; member_tier: number | null; member_name: string | null }
 export function comments(videoId: string, viewer?: string | null): Comment[] {
-  const rows = sql(`SELECT c.*, a.handle a_handle, a.name a_name, a.avatar a_avatar, a.verified a_verified, v.channel_id owner, cv.value my_vote,
+  const rows = sql(`SELECT c.*, a.handle a_handle, a.name a_name, a.avatar a_avatar, a.verified a_verified, a.subscribers a_subs, v.channel_id owner, cv.value my_vote,
       m.tier member_tier, t.name member_name
     FROM comments c JOIN videos v ON v.id = c.video_id
     LEFT JOIN users a ON a.id = c.author_id
@@ -210,7 +210,7 @@ export function comments(videoId: string, viewer?: string | null): Comment[] {
     WHERE c.video_id = @video ORDER BY c.created_at`).all({ video: videoId, viewer: vid(viewer) }) as CommentRow[];
   return rows.map((r) => ({
     id: r.id, videoId: r.video_id, parentId: r.parent_id,
-    author: { id: r.author_id, name: r.a_name ?? r.author_name ?? 'Unknown', handle: r.a_handle ?? r.author_name ?? '@unknown', avatar: r.a_avatar, verified: !!r.a_verified, membership: r.member_tier ? { tier: r.member_tier, name: r.member_name ?? 'Supporter' } : null },
+    author: { id: r.author_id, name: r.a_name ?? r.author_name ?? 'Unknown', handle: r.a_handle ?? r.author_name ?? '@unknown', avatar: r.a_avatar, verified: !!r.a_verified || (r.a_subs ?? 0) >= 50_000, membership: r.member_tier ? { tier: r.member_tier, name: r.member_name ?? 'Supporter' } : null },
     byCreator: r.author_id === r.owner, mine: !!viewer && r.author_id === viewer,
     text: r.text, likes: r.likes, myVote: (r.my_vote ?? 0) as -1 | 0 | 1, pinned: !!r.pinned, hearted: !!r.hearted, edited: !!r.edited, createdAt: r.created_at,
   }));

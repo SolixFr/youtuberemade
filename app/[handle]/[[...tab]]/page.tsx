@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Ago } from '@/components/ago';
-import { ShortCard, Thumbnail, VerifiedBadge, VideoCard } from '@/components/cards';
+import { ShortCard, Thumbnail, VideoCard } from '@/components/cards';
+import { ChannelLiveHead } from '@/components/channel-live';
 import { PlaylistTile } from '@/components/library';
 import { MessageButton } from '@/components/messages';
 import { RouteChips } from '@/components/route-chips';
@@ -288,8 +289,7 @@ export default async function ChannelPage({ params, searchParams }: Props) {
       <header className="ch-header">
         <ChannelHeaderAvatar channel={c} live={!!live} />
         <div className="ch-info">
-          <h1>{c.name}{c.verified && <VerifiedBadge size={24} />}</h1>
-          <div className="ch-line"><b>{c.handle}</b>{c.pronouns && <> · {c.pronouns}</>} · {formatCount(c.subscribers)} subscribers · {all.length} video{all.length === 1 ? '' : 's'}</div>
+          <ChannelLiveHead id={c.id} name={c.name} handle={c.handle} pronouns={c.pronouns} videos={all.length} initialSubs={c.subscribers} initialVerified={c.verified} />
           <Link href={`/${c.handle}/about`} className="ch-desc" scroll={false}>
             <span>{c.description || (mine ? 'Add a channel description in Studio' : 'More about this channel')}</span><Icon name="chevron_right" />
           </Link>

@@ -219,7 +219,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             <div className="w-owner">
               <ChannelAvatar channel={v.channel} size={40} />
               <div className="w-owner-text">
-                <Link href={`/${v.channel.handle}`} className="w-owner-name ch-name">{v.channel.name}{v.channel.verified && <VerifiedBadge />}</Link>
+                <Link href={`/${v.channel.handle}`} className="w-owner-name ch-name">{v.channel.name}{(v.channel.verified || subs >= 50_000) && <VerifiedBadge />}</Link>
                 <div className="w-owner-subs">{formatCount(subs)} subscribers</div>
               </div>
               <SubscribeButton channel={v.channel} initial={{ subscribed: state.subscribed, bell: state.bell }} onCount={setSubs} />
