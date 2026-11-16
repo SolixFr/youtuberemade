@@ -130,7 +130,6 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
     const r = await rateVideo(v.id, target);
     if (!r.ok) { setRating(prev.rating); setLikes(prev.likes); return toast(r.error); }
     setLikes(r.data.likes);
-    if (value === 1) toast(target === 1 ? 'Added to Liked videos' : 'Removed from Liked videos');
   });
 
   const chapters = parseChapters(v.description, v.duration);
