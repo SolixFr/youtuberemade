@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { setBell, setSubscribed } from '@/lib/actions/channels';
 import { addComment, deleteComment, deletePost, editComment, likePost, moderateComment, refreshPost, voteComment, votePoll } from '@/lib/actions/social';
 import {formatCount, watchHref } from '@/lib/format';
@@ -85,28 +85,54 @@ export function RichText({ text, onSeek }: { text: string; onSeek?: (t: number) 
 }
 
 /* ---------------- Comments ---------------- */
+const COMPOSER_EMOJIS = ['😀', '😁', '😂', '🤣', '😊', '😍', '😎', '😭', '😮', '😡', '👍', '👎', '👏', '🙏', '🔥', '❤️',
+  '💯', '🎉', '👀', '🤔', '😴', '🥳', '😱', '🤯', '💀', '👌', '✌️', '🤝', '💪', '🫡', '😇', '🤠',
+  '🥺', '😤', '🙌', '👋', '🎬', '🎮', '🎵', '⚽'];
+
 function Composer({ placeholder, onSubmit, onCancel, autoFocus, reply }: { placeholder: string; onSubmit: (t: string) => Promise<boolean>; onCancel?: () => void; autoFocus?: boolean; reply?: boolean }) {
   const app = useApp();
   const [text, setText] = useState('');
   const [active, setActive] = useState(!!autoFocus);
   const [busy, setBusy] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+  }, [text]);
+  const insertEmoji = (e: string) => {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + e + text.slice(end));
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(start + e.length, start + e.length); });
+  };
   const submit = async () => {
     setBusy(true);
     const ok = await onSubmit(text.trim());
     setBusy(false);
-    if (ok) { setText(''); setActive(!!reply); }
+    if (ok) { setText(''); setActive(!!reply); setEmojiOpen(false); }
   };
   return (
     <div className={`c-composer ${reply ? 'reply' : ''}`}>
       <Avatar channel={app.me} name="?" size={reply ? 24 : 40} />
       <div className="c-field">
-        <textarea className="line-input" rows={1} value={text} placeholder={placeholder} autoFocus={autoFocus} maxLength={10_000}
+        <textarea ref={inputRef} className="line-input" rows={1} value={text} placeholder={placeholder} autoFocus={autoFocus} maxLength={10_000}
           onFocus={() => app.requireAuth('Sign in to comment', () => setActive(true))}
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) void submit(); }}
-          onChange={(e) => { setText(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`; }} />
+          onKeyDown={(e) => { if (e.key === 'Escape' && emojiOpen) setEmojiOpen(false); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) void submit(); }}
+          onChange={(e) => setText(e.target.value)} />
         {active && (
           <div className="c-actions">
-            <Button variant="text" onClick={() => { setText(''); setActive(false); onCancel?.(); }}>Cancel</Button>
+            <span className="emoji-wrap">
+              <IconButton icon="emoji_emotions" label="Show emoji picker" onClick={() => setEmojiOpen((o) => !o)} />
+              {emojiOpen && (
+                <span className="emoji-pop" role="dialog" aria-label="Emoji picker">{COMPOSER_EMOJIS.map((e) => (
+                  <button key={e} type="button" className="emoji-cell" onClick={() => { insertEmoji(e); setEmojiOpen(false); }}>{e}</button>
+                ))}</span>
+              )}
+            </span>
+            <span className="grow" />
+            <Button variant="text" onClick={() => { setText(''); setActive(false); setEmojiOpen(false); onCancel?.(); }}>Cancel</Button>
             <Button variant="blue" disabled={!text.trim() || busy} onClick={submit}>{reply ? 'Reply' : 'Comment'}</Button>
           </div>
         )}
@@ -244,8 +270,8 @@ export function Comments({ videoId, owner, initial, onSeek, compact }: {
       {top.map((c) => <CommentItem key={c.id} c={c} replies={list.filter((r) => r.parentId === c.id)} owner={owner} onSeek={onSeek} update={update} remove={remove} add={add} />)}
       {!top.length && <p className="muted">No comments yet. Start the conversation.</p>}
       {anchor && <Menu anchor={anchor} onClose={() => setAnchor(null)} align="left" sheet={false} items={[
-        { label: 'Top comments', checked: sort === 'top', onSelect: () => setSort('top') },
-        { label: 'Newest first', checked: sort === 'new', onSelect: () => setSort('new') },
+        { label: (<span className="sort-opt"><b>Top</b><small>Show featured comments</small></span>), checked: sort === 'top', onSelect: () => setSort('top') },
+        { label: (<span className="sort-opt"><b>Newest</b><small>Show recent comments, including potential spam</small></span>), checked: sort === 'new', onSelect: () => setSort('new') },
       ]} />}
     </div>
   );

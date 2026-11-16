@@ -689,9 +689,14 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .c-composer { display: flex; gap: 16px; margin-bottom: 32px; }
 .c-composer.reply { margin: 8px 0 16px; gap: 12px; }
 .c-field { flex: 1; min-width: 0; }
-.c-field textarea { display: block; width: 100%; background: none; border: 1px solid var(--border); border-radius: 4px; padding: 8px; resize: none; }
-.c-field textarea:focus { outline: none; border-color: var(--blue); }
-.c-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.c-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.c-actions .btn-blue:disabled { opacity: 1; background: var(--tonal); color: var(--text-2); }
+.sort-opt { display: flex; flex-direction: column; line-height: 20px; }
+.sort-opt small { color: var(--text-2); font-size: 12px; line-height: 18px; }
+.emoji-wrap { position: relative; display: inline-flex; }
+.emoji-pop { position: absolute; left: 0; bottom: calc(100% + 8px); display: grid; grid-template-columns: repeat(8, 32px); gap: 2px; background: var(--bg-menu); border-radius: 12px; padding: 8px; box-shadow: var(--shadow); z-index: 60; }
+.emoji-cell { font-size: 20px; line-height: 32px; width: 32px; height: 32px; border-radius: 8px; }
+.emoji-cell:hover { background: var(--hover); }
 .comment { display: flex; gap: 16px; margin-bottom: 16px; }
 .comment.reply { gap: 12px; margin-bottom: 8px; }
 .c-body { flex: 1; min-width: 0; }
