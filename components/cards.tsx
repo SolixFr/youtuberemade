@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { hide, toggleWatchLater } from '@/lib/actions/videos';
-import {formatCount, formatDuration, watchHref } from '@/lib/format';
+import { formatCount, formatDuration, timeAgoCompact, watchHref } from '@/lib/format';
 import type { ChannelLite, Video } from '@/lib/types';
-import { Ago } from './ago';
 import { useApp } from './app-context';
 import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
 
@@ -30,7 +29,14 @@ export function ChannelName({ channel, className = '' }: { channel: ChannelLite;
 }
 
 function ViewsLine({ v }: { v: Video }) {
-  return <span className="views-line">{formatCount(v.views)} views<span className="dot-sep" /><Ago ts={v.publishedAt} /></span>;
+  return (
+    <span className="views-line" role="text" aria-label={`${v.views.toLocaleString('en-US')} views`}>
+      <Icon name="play_arrow" size={12} className="views-ic" />
+      <span aria-hidden="true">{formatCount(v.views)}</span>
+      <span className="dot-sep" aria-hidden="true" />
+      <time dateTime={new Date(v.publishedAt).toISOString()} suppressHydrationWarning>{timeAgoCompact(v.publishedAt)}</time>
+    </span>
+  );
 }
 
 /** Shared "Watch later" toggle used by cards, menus and the watch page. */
@@ -44,8 +50,8 @@ export function useWatchLater() {
   });
 }
 
-/** Thumbnail with duration, resume bar, and a muted inline preview after hovering. */
-export function Thumbnail({ v, preview = true, actions = true }: { v: Video; preview?: boolean; actions?: boolean }) {
+/** Thumbnail with duration, resume bar, New overlay, and muted inline preview after hovering. */
+export function Thumbnail({ v, preview = true, actions = true, isNew = false }: { v: Video; preview?: boolean; actions?: boolean; isNew?: boolean }) {
   const app = useApp();
   const toast = useToast();
   const watchLater = useWatchLater();
@@ -78,6 +84,7 @@ export function Thumbnail({ v, preview = true, actions = true }: { v: Video; pre
           onPlaying={() => setPlaying(true)} onLoadedMetadata={(e) => { if (v.progress) e.currentTarget.currentTime = v.progress; }} />
       )}
       {v.live ? <span className="thumb-live">LIVE</span> : v.type !== 'short' && <span className="duration">{formatDuration(v.duration)}</span>}
+      {isNew && !v.live && <span className="badge-new-overlay">New</span>}
       {pct > 1 && <span className="resume"><span style={{ width: `${pct}%` }} /></span>}
       {actions && v.type !== 'short' && (
         <span className="thumb-actions">
@@ -125,7 +132,7 @@ export function VideoMenuButton({ v, extra = [], className = '' }: { v: Video; e
   ];
   return (
     <>
-      <IconButton icon="more_vert" label="Action menu" className={`more ${className}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAnchor(e.currentTarget); }} />
+      <IconButton icon="more_vert" label="More actions" className={`more ${className}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAnchor(e.currentTarget); }} />
       {anchor && <Menu anchor={anchor} onClose={() => setAnchor(null)} items={items} />}
     </>
   );
@@ -144,16 +151,14 @@ export function ChannelAvatar({ channel, size = 36 }: { channel: ChannelLite; si
 
 export function VideoCard({ v }: { v: Video }) {
   const router = useRouter();
-  const [isNew] = useState(() => Date.now() - v.publishedAt < 2 * 86_400_000);
   return (
     <article className="card" onClick={() => router.push(watchHref(v))}>
       <Link href={watchHref(v)} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} /></Link>
       <div className="card-meta">
         <ChannelAvatar channel={v.channel} />
         <div className="card-text">
-          <h3 className="v-title"><Link href={watchHref(v)} onClick={(e) => e.stopPropagation()} title={v.title}>{v.title}</Link></h3>
+          <h3 className="v-title" title={v.title}><Link href={watchHref(v)} onClick={(e) => e.stopPropagation()} title={v.title}>{v.title}</Link></h3>
           <div className="v-sub"><ChannelName channel={v.channel} /><ViewsLine v={v} /></div>
-          {isNew && <span className="badge-new">New</span>}
         </div>
         <VideoMenuButton v={v} />
       </div>
@@ -163,11 +168,12 @@ export function VideoCard({ v }: { v: Video }) {
 
 export function CompactCard({ v, active, index, extraMenu, href }: { v: Video; active?: boolean; index?: number; extraMenu?: MenuItem[]; href?: string }) {
   const router = useRouter();
+  const [isNew] = useState(() => Date.now() - v.publishedAt < 2 * 86_400_000);
   const to = href ?? watchHref(v);
   return (
     <article className={`compact ${active ? 'active' : ''}`} onClick={() => router.push(to)}>
       {index !== undefined && <span className="compact-index">{active ? <Icon name="play_arrow" size={16} /> : index + 1}</span>}
-      <Link href={to} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} actions={false} /></Link>
+      <Link href={to} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} actions={false} isNew={isNew} /></Link>
       <div className="compact-text">
         <h3 className="v-title"><Link href={to} onClick={(e) => e.stopPropagation()}>{v.title}</Link></h3>
         <div className="v-sub"><ChannelName channel={v.channel} /><ViewsLine v={v} /></div>
@@ -202,9 +208,10 @@ export function ListCard({ v, small, extraMenu }: { v: Video; small?: boolean; e
 
 export function ShortCard({ v }: { v: Video }) {
   const router = useRouter();
+  const [isNew] = useState(() => Date.now() - v.publishedAt < 2 * 86_400_000);
   return (
     <article className="short-card" onClick={() => router.push(`/shorts/${v.id}`)}>
-      <Thumbnail v={v} preview={false} actions={false} />
+      <Thumbnail v={v} preview={false} actions={false} isNew={isNew} />
       <div className="short-card-meta">
         <div><h3 className="v-title">{v.title}</h3><div className="v-sub">{formatCount(v.views)} views</div></div>
         <VideoMenuButton v={v} />

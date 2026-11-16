@@ -369,7 +369,7 @@ img { display: block; }
 .resume span { display: block; height: 100%; background: var(--red); }
 .thumb-actions { position: absolute; top: 8px; right: 8px; display: none; flex-direction: column; gap: 4px; }
 .card:hover .thumb-actions, .list-card:hover .thumb-actions { display: flex; }
-.thumb-actions button { width: 28px; height: 28px; border-radius: 4px; background: rgba(0, 0, 0, 0.8); color: #fff; display: flex; align-items: center; justify-content: center; }
+.thumb-actions button { width: 32px; height: 32px; border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: #fff; display: flex; align-items: center; justify-content: center; }
 .card-meta { display: flex; gap: 12px; position: relative; padding-right: 24px; }
 .card-avatar { flex-shrink: 0; display: inline-flex; align-self: flex-start; }
 .card-text { min-width: 0; flex: 1; }
@@ -380,9 +380,10 @@ img { display: block; }
 .v-sub .ch-name { display: flex; }
 .verified { color: var(--text-2); }
 .verified-badge { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; cursor: default; }
-.views-line { display: block; }
+.views-line { display: inline-flex; align-items: center; min-width: 0; }
+.views-ic { color: var(--text-2); margin-right: 2px; flex-shrink: 0; }
 .dot-sep::before { content: '•'; margin: 0 4px; }
-.badge-new { display: inline-block; margin-top: 4px; padding: 0 4px; border-radius: 4px; background: var(--tonal); color: var(--text-2); font-size: 12px; font-weight: 500; line-height: 18px; }
+.badge-new-overlay { position: absolute; top: 8px; left: 8px; background: rgba(0, 0, 0, 0.8); color: #fff; font-size: 12px; line-height: 18px; font-weight: 500; padding: 0 4px; border-radius: 4px; }
 .more { position: absolute; right: -12px; top: -6px; opacity: 0; }
 .card:hover .more, .compact:hover .more, .list-card:hover .more, .short-card:hover .more, .more:focus-visible { opacity: 1; }
 @media (hover: none) { .more { opacity: 1; } }
@@ -1215,7 +1216,6 @@ button.studio-link { background: none; border: 0; width: 100%; text-align: left;
   .v-sub { font-size: 12px; line-height: 18px; }
   .card .v-sub, .compact .v-sub { display: flex; flex-wrap: wrap; }
   .card .v-sub .verified { display: none; }
-  .badge-new { display: none; }
   .thumb-actions { display: none !important; }
   .shelf { margin: 0 0 24px; padding: 12px; border-top: 0; border-bottom: 4px solid var(--divider); }
   .shelf-title { font-size: 18px; margin-bottom: 12px; }

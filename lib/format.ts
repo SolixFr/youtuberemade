@@ -42,6 +42,17 @@ export function timeAgo(ts: number, now = Date.now()): string {
   return 'just now';
 }
 
+/** Compact relative time for video lockup metadata ("22h ago", "4d ago"), matching the reference cards. */
+export function timeAgoCompact(ts: number, now = Date.now()): string {
+  const diff = Math.max(0, (now - ts) / 1000);
+  const units: [number, string][] = [[31_536_000, 'y'], [2_592_000, 'mo'], [604_800, 'w'], [86_400, 'd'], [3_600, 'h'], [60, 'm'], [1, 's']];
+  for (const [size, suffix] of units) {
+    const val = Math.floor(diff / size);
+    if (val >= 1) return `${val}${suffix} ago`;
+  }
+  return 'just now';
+}
+
 export function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
