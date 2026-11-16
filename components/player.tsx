@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { saveProgress } from '@/lib/actions/videos';
 import { formatDuration, parseChapters } from '@/lib/format';
-import { Chips, Icon, IconButton, Spinner, Switch, useIsMobile, useToast } from './ui';
+import { Icon, Switch, useIsMobile, useToast } from './ui';
 import { BottomSheet } from './bottom-sheet';
 
 /** The few fields the player needs; the miniplayer and Studio preview pass the same shape. */
@@ -39,13 +39,15 @@ interface Props {
   onNext?: () => void;
   onEnded?: () => void;
   onTime?: (t: number) => void;
+  /** Opens the "In this video" chapters panel (rendered by the watch page in the recommendations column). */
+  onOpenChapters?: () => void;
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const prefs = { volume: 1, muted: false, rate: 1, captions: false, ambient: true };
 
 export const Player = forwardRef<PlayerHandle, Props>(function Player(
-  { video: v, autoplay = true, autoplayNext, onAutoplayNext, startAt, clip, hotkeys, compact, theater, onTheater, onMini, onNext, onEnded, onTime }, ref,
+  { video: v, autoplay = true, autoplayNext, onAutoplayNext, startAt, clip, hotkeys, compact, theater, onTheater, onMini, onNext, onEnded, onTime, onOpenChapters }, ref,
 ) {
   const src = v.src;
   const captionsUrl = v.captions;
@@ -67,10 +69,6 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const [ambientOn, setAmbientOn] = useState(prefs.ambient);
   const [loop, setLoop] = useState(!!clip);
   const [settings, setSettings] = useState<null | 'main' | 'speed' | 'sleep'>(null);
-  const [panelTab, setPanelTab] = useState<null | 'chapters' | 'transcript'>(null);
-  const [cues, setCues] = useState<{ t: number; text: string }[] | null>(null);
-  const [cuesLoading, setCuesLoading] = useState(false);
-  const activeRowRef = useRef<HTMLElement>(null);
   const [sleepAt, setSleepAt] = useState<number | null>(null);
   const [ui, setUi] = useState(true);
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -171,34 +169,6 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
       el.removeEventListener('seeked', draw);
     };
   }, [ambientOn, compact, src]);
-
-  /* ---- transcript cues: parsed from the .vtt file only when the Transcript tab opens ---- */
-  useEffect(() => {
-    if (panelTab !== 'transcript' || !captionsUrl || cues !== null) return;
-    let alive = true;
-    setCuesLoading(true);
-    fetch(captionsUrl).then((r) => r.text()).then((txt) => {
-      if (!alive) return;
-      const out: { t: number; text: string }[] = [];
-      for (const block of txt.replace(/\r/g, '').split(/\n{2,}/)) {
-        const lines = block.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('WEBVTT') && !l.startsWith('NOTE'));
-        if (!lines.length) continue;
-        const m = lines[0].match(/(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})/);
-        if (!m) continue;
-        const t = (m[1] ? parseInt(m[1], 10) * 3600 : 0) + parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
-        const text = lines.slice(1).join(' ').replace(/<[^>]*>/g, '').trim();
-        if (text) out.push({ t, text });
-      }
-      setCues(out);
-      setCuesLoading(false);
-    }).catch(() => { if (alive) { setCues([]); setCuesLoading(false); } });
-    return () => { alive = false; };
-  }, [panelTab, captionsUrl, cues]);
-
-  /* ---- keep the active chapter/cue in view while the panel is open ---- */
-  useEffect(() => {
-    if (panelTab !== null) activeRowRef.current?.scrollIntoView({ block: 'nearest' });
-  });
 
   /* ---- controls visibility ---- */
   const poke = useCallback(() => {
@@ -401,7 +371,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
   const hoverTime = hoverX !== null ? hoverX * dur : 0;
   const hoverChapter = [...chapters].reverse().find((c) => c.t <= hoverTime);
   const segments = chapters.length ? chapters.map((c, i) => ({ start: c.t, end: chapters[i + 1]?.t ?? dur })) : [{ start: 0, end: dur }];
-  const showUi = ui || paused || settings !== null || panelTab !== null;
+  const showUi = ui || paused || settings !== null;
 
   const settingsLabel = settings === 'main' ? 'Settings' : settings === 'speed' ? 'Playback speed' : 'Sleep timer';
   // The same rows render in the floating menu on desktop and the bottom sheet (image-3) on phones.
@@ -438,57 +408,6 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           ))}
         </>
       )}
-    </>
-  );
-
-  /* "In this video" side panel: the reference shell (title, close, Chapters /
-     Transcript tabs, chapter rows with thumbnail + timestamp). */
-  const seekTo = (s: number) => {
-    const el = video.current;
-    if (!el) return;
-    el.currentTime = s;
-    setT(s);
-    if (el.paused) el.play().catch(() => {});
-  };
-  const cueNow = cues ? [...cues].reverse().find((c) => c.t <= t) : undefined;
-  const setRowRef = (active: boolean) => (node: HTMLElement | null) => { if (active) activeRowRef.current = node; };
-  const panelTabs = (
-    <div className="p-panel-chips">
-      <Chips items={[{ id: 'chapters', label: 'Chapters' }, { id: 'transcript', label: 'Transcript' }]} value={panelTab ?? 'chapters'} onChange={(id) => setPanelTab(id)} />
-    </div>
-  );
-  const panelBody = panelTab && (
-    <div className="p-panel-body">
-      {panelTab === 'chapters' ? chapters.map((c) => {
-        const active = chapterNow?.t === c.t;
-        return (
-          <button type="button" key={c.t} ref={setRowRef(active) as React.Ref<HTMLButtonElement>} className={`p-ch-row ${active ? 'active' : ''}`} aria-current={active} onClick={() => seekTo(c.t)}>
-            {v.thumbnail ? <img src={v.thumbnail} alt="" loading="lazy" draggable={false} /> : <span className="p-ch-thumb" />}
-            <b>{c.title}</b>
-            <span className="p-ch-time">{formatDuration(c.t)}</span>
-          </button>
-        );
-      }) : cuesLoading ? <div className="center-pad"><Spinner /></div>
-        : !captionsUrl ? <p className="p-panel-note">Transcript isn’t available for this video.</p>
-        : !cues?.length ? <p className="p-panel-note">No transcript lines found.</p>
-        : cues.map((c, i) => {
-          const active = cueNow === c;
-          return (
-            <button type="button" key={`${c.t}-${i}`} ref={setRowRef(active) as React.Ref<HTMLButtonElement>} className={`p-cue ${active ? 'active' : ''}`} aria-current={active} onClick={() => seekTo(c.t)}>
-              <span className="link">{formatDuration(c.t)}</span><span>{c.text}</span>
-            </button>
-          );
-        })}
-    </div>
-  );
-  const panelContent = panelTab && (
-    <>
-      <div className="p-panel-head">
-        <h2>In this video</h2>
-        <IconButton icon="close" label="Close" onClick={() => setPanelTab(null)} />
-      </div>
-      {panelTabs}
-      {panelBody}
     </>
   );
 
@@ -550,15 +469,6 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
           </div>
         ))}
 
-        {panelTab && chapters.length > 0 && (mobile && !compact ? (
-          <BottomSheet onClose={() => setPanelTab(null)} label="In this video" className="player-sheet">
-            {panelTabs}
-            {panelBody}
-          </BottomSheet>
-        ) : (
-          !compact && <aside className="p-panel" aria-label="In this video">{panelContent}</aside>
-        ))}
-
         <div className="p-controls">
           <div className="p-bar" ref={bar} onPointerDown={scrub} onPointerMove={(e) => hoverPreview(e.clientX)} onPointerLeave={() => setHoverX(null)}>
             {hoverX !== null && (
@@ -598,7 +508,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 onChange={(e) => { const el = video.current!; el.volume = Number(e.target.value); el.muted = el.volume === 0; prefs.volume = el.volume; prefs.muted = el.muted; }} />
             </div>
             <span className="p-time">{formatDuration(t)} <span className="p-time-sep">/</span> {formatDuration(dur)}</span>
-            {chapterNow && <button type="button" className={`p-chapter hide-compact ${panelTab ? 'on' : ''}`} onClick={() => { setPanelTab(panelTab ? null : 'chapters'); setSettings(null); }} aria-label="Chapters" data-tip="Chapters">· {chapterNow.title} <Icon name="chevron_right" size={18} /></button>}
+            {chapterNow && onOpenChapters && <button type="button" className="p-chapter hide-compact" onClick={() => { setSettings(null); onOpenChapters(); }} aria-label="Chapters" data-tip="Chapters">· {chapterNow.title} <Icon name="chevron_right" size={18} /></button>}
             <span className="grow" />
             {!compact && onAutoplayNext && (
               <span className="p-autoplay hide-mobile" data-tip={`Autoplay is ${autoplayNext ? 'on' : 'off'}`}>

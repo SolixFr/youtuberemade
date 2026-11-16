@@ -7,6 +7,7 @@ import { Ago } from '@/components/ago';
 import { useApp } from '@/components/app-context';
 import { ChannelAvatar, CompactCard, Thumbnail, VerifiedBadge, useWatchLater } from '@/components/cards';
 import { Player, type PlayerHandle } from '@/components/player';
+import { ChapterPanel } from '@/components/chapter-panel';
 import { Comments, RichText, SubscribeButton } from '@/components/social';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CommentsSheet } from './comments-sheet';
@@ -81,9 +82,12 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
   const [likeBurst, setLikeBurst] = useState(0);
   const [dislikeBurst, setDislikeBurst] = useState(0);
   const [nearEnd, setNearEnd] = useState(false);
+  const [panelTab, setPanelTab] = useState<null | 'chapters' | 'transcript'>(null);
+  const [nowT, setNowT] = useState(0);
+  const panelRef = useRef<HTMLElement>(null);
   const [wmSubbed, setWmSubbed] = useState(state.subscribed);
   const wmVisible = !!watermark && !wmSubbed && app.me?.id !== v.channel.id && (watermark.display === 'full' || nearEnd || ended);
-  const onTimeTick = (t: number) => { time.current = t; if (watermark && watermark.display !== 'full') setNearEnd(t >= (watermark.display === 'custom' ? watermark.start : v.duration - 8)); };
+  const onTimeTick = (t: number) => { time.current = t; setNowT((prev) => (Math.abs(t - prev) < 1 ? prev : t)); if (watermark && watermark.display !== 'full') setNearEnd(t >= (watermark.display === 'custom' ? watermark.start : v.duration - 8)); };
   const subscribeFromWm = async () => {
     if (!app.me) { router.push(`/signin?next=${encodeURIComponent(`/watch?v=${v.id}`)}`); return; }
     const r = await setSubscribed(v.channel.id, true);
@@ -134,6 +138,8 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
 
   const chapters = parseChapters(v.description, v.duration);
   const seek = (t: number) => { player.current?.seek(t); player.current?.play(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  // Panel seeks stay put — the panel lives beside the player, so don't jump the page.
+  const seekQuiet = (t: number) => { player.current?.seek(t); player.current?.play(); setNowT(t); };
   const download = () => {
     const a = document.createElement('a');
     a.href = v.src;
@@ -149,6 +155,11 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
     router.push('/');
   };
   const miniGesture = useSwipeMini({ enabled: mobile, target: () => player.current?.root ?? null, onDismiss: minimize });
+
+  // On phones the recommendations column sits below the player — bring the opened panel into view.
+  useEffect(() => {
+    if (panelTab && mobile) panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [panelTab, mobile]);
 
   // Seeking from the description sheet also closes the sheet; on desktop it just seeks.
   const seeker = (t: number) => { seek(t); if (mobile && descOpen) setDescOpen(false); };
@@ -189,6 +200,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             onAutoplayNext={(on) => { setAutoplay(on); if (app.me) void updateSettings({ autoplay: on }); }}
             onTheater={() => { const t = !theater; setTheater(t); try { localStorage.setItem('vidora-theater', t ? '1' : '0'); } catch { /* storage blocked */ } }}
             onMini={minimize}
+            onOpenChapters={chapters.length > 0 ? () => setPanelTab((prev) => (prev ? null : 'chapters')) : undefined}
 
             onNext={nextHref ? goNext : undefined}
             onTime={(t) => onTimeTick(t)}
@@ -251,6 +263,11 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
         </div>
       </div>
       <aside className="watch-secondary">
+        {panelTab && chapters.length > 0 && (
+          <div ref={panelRef as React.Ref<HTMLDivElement>}>
+            <ChapterPanel key={v.id} thumbnail={v.thumbnail} chapters={chapters} currentTime={nowT} seek={seekQuiet} captionsUrl={v.captions} initialTab={panelTab} onClose={() => setPanelTab(null)} />
+          </div>
+        )}
         {playlist && (
           <div className="side-box">
             <div className="box-head"><div className="grow"><b>{playlist.title}</b><span className="muted small">{Math.max(1, playlist.videos.findIndex((x) => x.id === v.id) + 1)} / {playlist.videos.length}</span></div></div>
