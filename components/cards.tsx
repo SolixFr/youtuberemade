@@ -9,13 +9,13 @@ import type { ChannelLite, Video } from '@/lib/types';
 import { useApp } from './app-context';
 import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
 
-export function VerifiedBadge() {
+export function VerifiedBadge({ size = 14 }: { size?: number }) {
   // Clicking the badge must not navigate (YouTube's verified mark shows a tooltip,
   // name goes to channel). preventDefault blocks the enclosing link.
   return (
     <span className="verified-badge" data-tooltip="Verified" role="img" aria-label="Verified"
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-      <CheckCircleIcon size={14} className="verified" />
+      <CheckCircleIcon size={size} className="verified" />
     </span>
   );
 }

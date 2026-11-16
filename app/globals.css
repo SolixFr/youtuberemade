@@ -380,8 +380,9 @@ img { display: block; }
 .ch-name { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
 .ch-name:hover { color: var(--text); }
 .v-sub .ch-name { display: flex; }
-.verified { color: var(--text-2); }
-.verified-badge { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; cursor: default; }
+.verified { color: inherit; display: block; flex-shrink: 0; }
+.verified-badge { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; cursor: default; color: inherit; }
+.ch-info h1 .verified-badge { margin-left: 0; }
 .views-line { display: inline-flex; align-items: center; min-width: 0; }
 .views-ic { color: var(--text-2); margin-right: 2px; flex-shrink: 0; }
 .dot-sep::before { content: '•'; margin: 0 4px; }
@@ -780,7 +781,6 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .ch-avatar { flex-shrink: 0; display: inline-flex; position: relative; }
 .ch-live-chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 6px; display: inline-flex; align-items: center; gap: 5px; background: #cc0000; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; border-radius: 4px; padding: 3px 9px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .ch-info h1 { font-size: 36px; line-height: 50px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.ch-info h1 .verified { font-size: 20px !important; }
 .ch-line { color: var(--text-2); font-size: 14px; line-height: 20px; margin-top: 4px; }
 .ch-line b { color: var(--text); font-weight: 500; }
 .ch-desc { color: var(--text-2); display: flex; align-items: center; gap: 4px; margin-top: 8px; cursor: pointer; max-width: 640px; font-size: 14px; line-height: 20px; }

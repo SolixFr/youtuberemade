@@ -288,7 +288,7 @@ export default async function ChannelPage({ params, searchParams }: Props) {
       <header className="ch-header">
         <ChannelHeaderAvatar channel={c} live={!!live} />
         <div className="ch-info">
-          <h1>{c.name}{c.verified && <VerifiedBadge />}</h1>
+          <h1>{c.name}{c.verified && <VerifiedBadge size={24} />}</h1>
           <div className="ch-line"><b>{c.handle}</b>{c.pronouns && <> · {c.pronouns}</>} · {formatCount(c.subscribers)} subscribers · {all.length} video{all.length === 1 ? '' : 's'}</div>
           <Link href={`/${c.handle}/about`} className="ch-desc" scroll={false}>
             <span>{c.description || (mine ? 'Add a channel description in Studio' : 'More about this channel')}</span><Icon name="chevron_right" />
