@@ -92,7 +92,7 @@ function SearchBox({ initial, onDone, autoFocus }: { initial: string; onDone?: (
     <div className="search">
       <form className="search-form" role="search" onSubmit={submit}>
         <div className="search-box">
-          <Icon name="search" size={20} className="search-lead" />
+          <Icon name="search" size={24} className="search-lead" />
           <input ref={input} value={q} autoFocus={autoFocus} placeholder="Search" aria-label="Search" autoComplete="off" spellCheck={false} enterKeyHint="search"
             onChange={(e) => { setQ(e.target.value); setHl(-1); setOpen(true); }}
             onFocus={() => setOpen(true)}
@@ -102,14 +102,14 @@ function SearchBox({ initial, onDone, autoFocus }: { initial: string; onDone?: (
               if (e.key === 'ArrowUp') { e.preventDefault(); setHl((h) => Math.max(-1, h - 1)); }
               if (e.key === 'Escape') { setOpen(false); input.current?.blur(); }
             }} />
-          {q && <IconButton icon="close" label="Clear search query" size={36} onClick={() => { setQ(''); input.current?.focus(); }} />}
+          {q && <IconButton icon="close" label="Clear search query" size={40} onClick={() => { setQ(''); input.current?.focus(); }} />}
         </div>
         <button className="search-btn" type="submit" aria-label="Search" data-tooltip="Search"><Icon name="search" /></button>
         {open && items.length > 0 && (
           <ul className="suggest" role="listbox">
             {items.map((s, i) => (
               <li key={s} role="option" aria-selected={i === hl} className={i === hl ? 'hl' : ''} onMouseDown={(e) => { e.preventDefault(); go(s); }}>
-                <Icon name={history.has(s) ? 'history' : 'search'} size={20} />
+                <Icon name={history.has(s) ? 'history' : 'search'} size={24} />
                 <span className="grow">{s}</span>
                 {history.has(s) && me && (
                   <button type="button" className="suggest-remove" onMouseDown={(e) => {
@@ -357,13 +357,13 @@ export function Masthead({ badges: initialBadges }: { badges: { notifications: n
   return (
     <header className="masthead">
       <div className="mh-start">
-        <IconButton icon="menu" label="Guide" className="guide-btn" onClick={onGuide} />
+        <IconButton icon="menu" label="Menu" className="guide-btn" onClick={onGuide} />
         <Logo />
       </div>
       <div className="mh-center"><SearchBox key={query} initial={query} /></div>
       <div className="mh-end">
         <IconButton icon="search" label="Search" className="mobile-only" onClick={() => setMobileSearch(true)} />
-        <button type="button" className="btn btn-tonal btn-md create-btn" {...toggleMenu('create')}>
+        <button type="button" className="btn btn-tonal btn-md create-btn" aria-label="Create" data-tooltip="Create" {...toggleMenu('create')}>
           <Icon name="add" /><span className="btn-label">Create</span>
         </button>
         {app.me ? (
@@ -392,7 +392,7 @@ export function Masthead({ badges: initialBadges }: { badges: { notifications: n
 function GuideLink({ href, icon, label, active, trailing, mini }: { href: string; icon: ReactNode; label: string; active?: boolean; trailing?: ReactNode; mini?: boolean }) {
   const app = useApp();
   return (
-    <Link href={href} className={`g-item ${active ? 'active' : ''} ${mini ? 'mini' : ''}`} title={label} aria-current={active ? 'page' : undefined} onClick={() => app.setDrawer(false)}>
+    <Link href={href} className={`g-item ${active ? 'active' : ''} ${mini ? 'mini' : ''}`} aria-label={label} aria-current={active ? 'page' : undefined} onClick={() => app.setDrawer(false)}>
       <span className="g-icon">{icon}</span>
       <span className="g-label">{label}</span>
       {trailing}

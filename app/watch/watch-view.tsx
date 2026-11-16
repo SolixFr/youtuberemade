@@ -167,8 +167,9 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
     <div className={`description ${descOpen ? 'open' : ''}`} onClick={() => !descOpen && setDescOpen(true)}>
       <div className="desc-stats">
         <span>{descOpen ? `${v.views.toLocaleString()} views` : `${formatCount(v.views)} views`}</span>
+        <span className="dot-sep" aria-hidden="true" />
         <span>{descOpen ? formatDate(v.publishedAt) : <Ago ts={v.publishedAt} />}</span>
-        {v.visibility !== 'public' && <span className="muted"><Icon name={v.visibility === 'private' ? 'lock' : 'link'} size={16} className="inline-icon" /> {v.visibility}</span>}
+        {v.visibility !== 'public' && <><span className="dot-sep" aria-hidden="true" /><span className="muted"><Icon name={v.visibility === 'private' ? 'lock' : 'link'} size={16} className="inline-icon" /> {v.visibility}</span></>}
       </div>
       <div className="desc-body"><RichText text={(descOpen ? v.description : v.description.split('\n\n')[0]) || 'No description has been added to this video.'} onSeek={seeker} /></div>
       {descOpen && chapters.length > 0 && (

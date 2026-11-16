@@ -172,13 +172,16 @@ function CommentItem({ c, replies, owner, onSeek, update, remove, add }: {
 
   return (
     <div className={`comment ${c.parentId ? 'reply' : ''}`}>
-      {c.author.id ? <Link href={`/${c.author.handle}`}><Avatar name={c.author.name} src={c.author.avatar} size={size} /></Link> : <Avatar name={c.author.handle} size={size} />}
+      <span className="c-ava">
+        {c.author.id ? <Link href={`/${c.author.handle}`}><Avatar name={c.author.name} src={c.author.avatar} size={size} /></Link> : <Avatar name={c.author.handle} size={size} />}
+        {c.hearted && <span className="c-hearted" title={`❤ by ${owner.name}`}><Icon name="favorite" filled size={10} /></span>}
+      </span>
       <div className="c-body">
         {c.pinned && <div className="c-pinned"><Icon name="push_pin" size={16} />Pinned by {owner.handle}</div>}
         <div className={`c-who ${c.byCreator ? 'creator' : ''}`}>
           <span>{c.author.handle}</span>
           {c.author.membership && <MemberBadge tier={c.author.membership.tier} name={c.author.membership.name} />}
-          {c.byCreator && c.author.verified && <CheckCircleIcon size={14} className="verified" />}
+          {c.author.verified && <CheckCircleIcon size={14} className="verified" />}
           <span className="c-when"><Ago ts={c.createdAt} />{c.edited ? ' (edited)' : ''}</span>
         </div>
         {editing ? (
@@ -199,9 +202,7 @@ function CommentItem({ c, replies, owner, onSeek, update, remove, add }: {
           <IconButton icon="thumb_up" filled={c.myVote === 1} label="Like" onClick={() => vote(1)} />
           <span className="c-count">{c.likes ? formatCount(c.likes) : ''}</span>
           <IconButton icon="thumb_down" filled={c.myVote === -1} label="Dislike" onClick={() => vote(-1)} />
-          {c.hearted && <span className="c-heart" title={`❤ by ${owner.name}`}><Avatar channel={owner} size={16} /><Icon name="favorite" filled size={14} className="heart" /></span>}
           <Button variant="text" onClick={() => app.requireAuth('Sign in to reply', () => setReplying(true))}>Reply</Button>
-          <span className="grow" />
           {(app.me) && <IconButton icon="more_vert" label="Action menu" onClick={(e) => setAnchor(e.currentTarget)} />}
         </div>
         {replying && (

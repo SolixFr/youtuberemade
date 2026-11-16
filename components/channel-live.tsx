@@ -24,7 +24,7 @@ export function ChannelLiveHead({ id, name, handle, pronouns, videos, initialSub
   return (
     <>
       <h1>{name}{verified && <VerifiedBadge size={24} tip={false} />}</h1>
-      <div className="ch-line"><b>{handle}</b>{pronouns && <> · {pronouns}</>} · {formatCount(subs)} subscribers · {videos} video{videos === 1 ? '' : 's'}</div>
+      <div className="ch-line"><span>{handle}</span>{pronouns && <> · {pronouns}</>} · {formatCount(subs)} subscribers · {videos} video{videos === 1 ? '' : 's'}</div>
     </>
   );
 }

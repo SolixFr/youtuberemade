@@ -69,7 +69,7 @@ export function ChapterPanel({ thumbnail, chapters, currentTime, seek, captionsU
     <section className="rec-panel" aria-label="In this video">
       <div className="rec-panel-head">
         <h2>In this video</h2>
-        <IconButton icon="close" label="Close" size={36} onClick={onClose} />
+        <IconButton icon="close" label="Close" size={24} onClick={onClose} />
       </div>
       <div className="rec-panel-chips">
         <Chips items={[{ id: 'chapters', label: 'Chapters' }, { id: 'transcript', label: 'Transcript' }]} value={tab} onChange={(id) => changeTab(id)} />

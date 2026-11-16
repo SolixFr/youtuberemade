@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { hide, toggleWatchLater } from '@/lib/actions/videos';
-import { formatCount, formatDuration, timeAgoCompact, watchHref } from '@/lib/format';
+import { formatCount, formatDuration, timeAgo, watchHref } from '@/lib/format';
 import type { ChannelLite, Video } from '@/lib/types';
 import { useApp } from './app-context';
 import { Avatar, CheckCircleIcon, Icon, IconButton, Menu, useToast, type MenuItem } from './ui';
@@ -32,10 +32,9 @@ export function ChannelName({ channel, className = '' }: { channel: ChannelLite;
 function ViewsLine({ v }: { v: Video }) {
   return (
     <span className="views-line" role="text" aria-label={`${v.views.toLocaleString('en-US')} views`}>
-      <Icon name="play_arrow" size={12} className="views-ic" />
-      <span aria-hidden="true">{formatCount(v.views)}</span>
+      <span aria-hidden="true">{formatCount(v.views)} views</span>
       <span className="dot-sep" aria-hidden="true" />
-      <time dateTime={new Date(v.publishedAt).toISOString()} suppressHydrationWarning>{timeAgoCompact(v.publishedAt)}</time>
+      <time dateTime={new Date(v.publishedAt).toISOString()} suppressHydrationWarning>{timeAgo(v.publishedAt)}</time>
     </span>
   );
 }
@@ -120,7 +119,7 @@ export function VideoMenuButton({ v, extra = [], className = '' }: { v: Video; e
     ...extra,
     ...(v.type !== 'short' ? [{ icon: 'playlist_add', label: 'Add to queue', onSelect: () => { app.setQueue([...app.queue.filter((x) => x.id !== v.id), { id: v.id, title: v.title }]); toast('Video added to queue'); } }] : []),
     { icon: 'schedule', label: 'Save to Watch later', onSelect: () => watchLater(v.id) },
-    { icon: 'bookmark', label: 'Save to playlist', onSelect: () => app.requireAuth('Sign in to save videos to playlists', () => app.open({ kind: 'save', videoId: v.id })) },
+    { icon: 'playlist_add', label: 'Save to playlist', onSelect: () => app.requireAuth('Sign in to save videos to playlists', () => app.open({ kind: 'save', videoId: v.id })) },
     { icon: 'share', label: 'Share', onSelect: () => app.open({ kind: 'share', title: v.title, path: watchHref(v) }) },
     { divider: true, label: '' },
     ...(mine
@@ -152,6 +151,7 @@ export function ChannelAvatar({ channel, size = 36 }: { channel: ChannelLite; si
 
 export function VideoCard({ v }: { v: Video }) {
   const router = useRouter();
+  const [isNew] = useState(() => Date.now() - v.publishedAt < 2 * 86_400_000);
   return (
     <article className="card" onClick={() => router.push(watchHref(v))}>
       <Link href={watchHref(v)} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} /></Link>
@@ -159,7 +159,7 @@ export function VideoCard({ v }: { v: Video }) {
         <ChannelAvatar channel={v.channel} />
         <div className="card-text">
           <h3 className="v-title" title={v.title}><Link href={watchHref(v)} onClick={(e) => e.stopPropagation()} title={v.title}>{v.title}</Link></h3>
-          <div className="v-sub"><ChannelName channel={v.channel} /><ViewsLine v={v} /></div>
+          <div className="v-sub"><ChannelName channel={v.channel} /><ViewsLine v={v} />{isNew && <><span className="dot-sep" aria-hidden="true" /><span>New</span></>}</div>
         </div>
         <VideoMenuButton v={v} />
       </div>
@@ -174,7 +174,7 @@ export function CompactCard({ v, active, index, extraMenu, href }: { v: Video; a
   return (
     <article className={`compact ${active ? 'active' : ''}`} onClick={() => router.push(to)}>
       {index !== undefined && <span className="compact-index">{active ? <Icon name="play_arrow" size={16} /> : index + 1}</span>}
-      <Link href={to} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} actions={false} isNew={isNew} /></Link>
+      <Link href={to} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} isNew={isNew} /></Link>
       <div className="compact-text">
         <h3 className="v-title"><Link href={to} onClick={(e) => e.stopPropagation()}>{v.title}</Link></h3>
         <div className="v-sub"><ChannelName channel={v.channel} /><ViewsLine v={v} /></div>
