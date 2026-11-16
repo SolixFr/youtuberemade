@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Ago } from '@/components/ago';
 import { useApp } from '@/components/app-context';
 import { ChannelAvatar, CompactCard, Thumbnail, VerifiedBadge, useWatchLater } from '@/components/cards';
@@ -11,7 +11,7 @@ import { Comments, RichText, SubscribeButton } from '@/components/social';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CommentsSheet } from './comments-sheet';
 import { useSwipeMini } from '@/components/swipe-mini';
-import { Avatar, Button, Chips, Icon, IconButton, Menu, useIsMobile, useToast } from '@/components/ui';
+import { Avatar, Button, Chips, Icon, IconButton, Menu, TouchFeedback, useIsMobile, useToast } from '@/components/ui';
 import { setSubscribed, updateSettings } from '@/lib/actions/channels';
 import { rateVideo, recordView } from '@/lib/actions/videos';
 import { formatCount, formatDate, formatDuration, parseChapters } from '@/lib/format';
@@ -49,8 +49,15 @@ function UpNext({ next, onPlay, onCancel }: { next: Video; onPlay: () => void; o
   );
 }
 
-export function WatchView({ video: v, state, comments, related, playlist, startAt, clip, autoplayNext: initialAutoplay, watermark }: {
-  video: Video; state: ViewerVideoState; comments: Comment[]; related: Video[];
+/* Twelve red burst dots around the thumb when a video is liked, alternating
+   YouTube reds. Module-level so render stays pure; replayed via key change. */
+const BURST_DOTS = Array.from({ length: 12 }, (_, i) => {
+  const a = (i / 12) * Math.PI * 2 + 0.26;
+  const r = i % 2 ? 30 : 21;
+  return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
+});
+
+export function WatchView({ video: v, state, comments, related, playlist, startAt, clip, autoplayNext: initialAutoplay, watermark }: {  video: Video; state: ViewerVideoState; comments: Comment[]; related: Video[];
   playlist: { id: string; title: string; videos: Video[] } | null; startAt?: number; clip?: { start: number; end: number }; autoplayNext: boolean;
   watermark?: { src: string; display: 'end' | 'custom' | 'full'; start: number; channelName: string; handle: string } | null;
 }) {
@@ -208,8 +215,12 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             </div>
             <div className="w-buttons">
               <div className="seg">
-                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon key={likeBurst} name="thumb_up" filled={rating === 1} className={likeBurst ? 'seg-burst' : ''} /><span className="count">{formatCount(likes)}</span></button>
-                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /></button>
+                <button type="button" aria-label="Like this video" aria-pressed={rating === 1} data-tooltip="I like this" onClick={() => rate(1)}><Icon key={likeBurst} name="thumb_up" filled={rating === 1} className={likeBurst ? 'seg-burst' : ''} />{rating === 1 && (
+                  <span key={`burst-${likeBurst}`} className="like-burst" aria-hidden="true">{BURST_DOTS.map((d, i) => (
+                    <span key={i} className="like-dot" style={{ '--tx': `${d.x}px`, '--ty': `${d.y}px` } as CSSProperties} />
+                  ))}</span>
+                )}<span className="count">{formatCount(likes)}</span><TouchFeedback /></button>
+                <button type="button" aria-label="Dislike this video" aria-pressed={rating === -1} data-tooltip="I dislike this" onClick={() => rate(-1)}><Icon key={dislikeBurst} name="thumb_down" filled={rating === -1} className={dislikeBurst ? 'seg-burst' : ''} /><TouchFeedback /></button>
               </div>
               <Button icon="share" data-tooltip="Share" aria-label="Share" onClick={() => app.open({ kind: 'share', title: v.title, path: `/watch?v=${v.id}`, startAt: time.current })} />
               <Button icon="download" data-tooltip="Download" aria-label="Download" onClick={download} />

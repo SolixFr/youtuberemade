@@ -2,7 +2,7 @@
 
 import {
 
-  createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore,
+  createContext, createElement, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore,
   type ButtonHTMLAttributes, type CSSProperties, type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -182,6 +182,15 @@ export const VISIBILITY_ITEMS: DropdownItem<Visibility>[] = [
   { id: 'unlisted', label: 'Unlisted', icon: 'link' },
   { id: 'private', label: 'Private', icon: 'lock' },
 ];
+
+/** YouTube's exact press-ripple host (renders as <yt-touch-feedback-shape>, so the
+    class names match the reference DOM). Drop inside a button; CSS drives the ripple. */
+export function TouchFeedback() {
+  return createElement('yt-touch-feedback-shape' as 'div',
+    { 'aria-hidden': true, className: 'ytSpecTouchFeedbackShapeHost ytSpecTouchFeedbackShapeTouchResponse' },
+    createElement('div', { className: 'ytSpecTouchFeedbackShapeStroke' }),
+    createElement('div', { className: 'ytSpecTouchFeedbackShapeFill' }));
+}
 
 /* ---------- Dropdown: styled replacement for <select> ---------- */
 export interface DropdownItem<T extends string = string> {

@@ -646,7 +646,7 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .w-buttons { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; min-width: 0; margin-left: auto; }
 .w-buttons::-webkit-scrollbar { display: none; }
 .seg { display: inline-flex; border-radius: 14px; background: var(--tonal); box-shadow: var(--btn-shadow); flex-shrink: 0; height: 36px; }
-.seg button { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; font-weight: 500; height: 36px; border-radius: 14px 0 0 14px; transition: background 0.15s, transform 0.1s; }
+.seg button { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; font-weight: 500; height: 36px; border-radius: 14px 0 0 14px; transition: background 0.15s, transform 0.1s; position: relative; }
 .seg button:last-child { padding: 0 16px 0 12px; border-radius: 0 14px 14px 0; position: relative; }
 .seg button:last-child::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--divider); }
 .seg button:hover { background: var(--tonal-hover); }
@@ -655,6 +655,18 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .seg .icon.seg-burst { animation: seg-pop 0.3s var(--ease-out); }
 .seg button .icon { transition: transform 0.1s; }
 @keyframes seg-pop { 0% { transform: scale(0.6); } 55% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* ---------- YouTube touch feedback + like burst ---------- */
+.ytSpecTouchFeedbackShapeHost { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.ytSpecTouchFeedbackShapeStroke, .ytSpecTouchFeedbackShapeFill { position: absolute; inset: 0; border-radius: inherit; }
+.ytSpecTouchFeedbackShapeFill { background: currentColor; opacity: 0; }
+.seg button:active .ytSpecTouchFeedbackShapeFill { animation: yt-touch-ripple 0.4s ease-out; }
+@keyframes yt-touch-ripple { 0% { opacity: 0.3; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.8); } }
+.like-burst { position: absolute; left: 24px; top: 50%; width: 0; height: 0; overflow: visible; pointer-events: none; }
+.like-dot { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: #ff0033; animation: like-dot-fly 0.55s ease-out forwards; }
+.like-dot:nth-child(3n) { background: #ff2d55; width: 4px; height: 4px; left: -2px; top: -2px; }
+.like-dot:nth-child(3n+1) { background: #ff8fa3; width: 3px; height: 3px; left: -1.5px; top: -1.5px; }
+@keyframes like-dot-fly { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); } }
 .subscribe-btn { margin-left: 0; }
 .description { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--tonal); cursor: pointer; font-size: 14px; line-height: 20px; }
 .description:hover:not(.open) { background: var(--tonal-hover); }
