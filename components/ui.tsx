@@ -30,6 +30,15 @@ export function CheckCircleIcon({ size = 24, className = '', style }: { size?: n
   );
 }
 
+/** YouTube's exact channel-header link glyph (chain), from the attribution view-model. */
+export function ChainLinkIcon({ size = 16, className = '', style }: { size?: number; className?: string; style?: CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} style={{ display: 'block', flexShrink: 0, ...style }} aria-hidden="true" focusable="false" fill="currentColor">
+      <path d="M9 18c.226 0 .448-.012.667-.037A8.001 8.001 0 018.07 16H7a4 4 0 110-8h2a4 4 0 014 4 2 2 0 001.668 1.973A5.999 5.999 0 009 6H7a6 6 0 100 12h2Zm8 0a6 6 0 100-12h-2c-.225 0-.448.012-.667.036A8 8 0 0115.93 8H17a4 4 0 110 8h-2a4 4 0 01-4-4 2 2 0 00-1.668-1.973A6 6 0 0015 18h2Z" />
+    </svg>
+  );
+}
+
 /* ---------- Icon (Material Symbols) ---------- */
 export function Icon({ name, filled, size = 24, className = '', style }: { name: string; filled?: boolean; size?: number; className?: string; style?: CSSProperties }) {
   return (

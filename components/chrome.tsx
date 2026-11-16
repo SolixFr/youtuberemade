@@ -305,6 +305,12 @@ function useBadges(initial: { notifications: number; messages: number }, signedI
     document.addEventListener('visibilitychange', tick);
     return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', tick); };
   }, [signedIn, pathname]);
+  // YouTube prefixes the tab title with the unread notification count.
+  useEffect(() => {
+    if (!signedIn) return;
+    const base = document.title.replace(/^\(\d+\+?\) /, '');
+    document.title = counts.notifications > 0 ? `(${counts.notifications > 9 ? '9+' : counts.notifications}) ${base}` : base;
+  }, [signedIn, counts.notifications]);
   return [counts, setCounts] as const;
 }
 

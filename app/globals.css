@@ -788,7 +788,7 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .ch-desc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-desc-more { flex-shrink: 0; font-weight: 500; }
 .ch-links { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 14px; line-height: 20px; }
-.ch-links .icon { color: var(--blue); flex-shrink: 0; }
+.ch-links svg { color: var(--blue); }
 .ch-links a { color: var(--blue); font-weight: 500; }
 .ch-buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; position: sticky; top: 56px; background: var(--bg); z-index: 40; }
