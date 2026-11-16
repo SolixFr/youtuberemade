@@ -506,10 +506,10 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             <div className="p-knob" style={{ left: `${dur ? (t / dur) * 100 : 0}%` }} />
           </div>
           <div className="p-row">
-            <button type="button" className="p-btn" onClick={toggle} aria-label={paused ? 'Play (k)' : 'Pause (k)'} data-tip={paused ? 'Play (k)' : 'Pause (k)'}><Icon name={paused ? 'play_arrow' : 'pause'} filled size={32} /></button>
-            {onNext && <button type="button" className="p-btn hide-compact" onClick={onNext} aria-label="Next (SHIFT+n)" data-tip="Next (SHIFT+n)"><Icon name="skip_next" filled size={30} /></button>}
+            <button type="button" className="p-btn p-circle" onClick={toggle} aria-label={paused ? 'Play (k)' : 'Pause (k)'} data-tip={paused ? 'Play (k)' : 'Pause (k)'}><Icon name={paused ? 'play_arrow' : 'pause'} filled size={32} /></button>
+            {onNext && <button type="button" className="p-btn p-circle hide-compact" onClick={onNext} aria-label="Next (SHIFT+n)" data-tip="Next (SHIFT+n)"><Icon name="skip_next" filled size={30} /></button>}
             <div className="p-volume">
-              <button type="button" className="p-btn" onClick={() => setMute(!muted)} aria-label={muted ? 'Unmute (m)' : 'Mute (m)'} data-tip={muted ? 'Unmute (m)' : 'Mute (m)'}>
+              <button type="button" className="p-btn p-circle" onClick={() => setMute(!muted)} aria-label={muted ? 'Unmute (m)' : 'Mute (m)'} data-tip={muted ? 'Unmute (m)' : 'Mute (m)'}>
                 <Icon name={muted || volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'} filled size={28} />
               </button>
               <input type="range" min={0} max={1} step={0.01} value={muted ? 0 : volume} aria-label="Volume"
@@ -517,8 +517,9 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                 onChange={(e) => { const el = video.current!; el.volume = Number(e.target.value); el.muted = el.volume === 0; prefs.volume = el.volume; prefs.muted = el.muted; }} />
             </div>
             <span className="p-time">{formatDuration(t)} <span className="p-time-sep">/</span> {formatDuration(dur)}</span>
-            {chapterNow && <button type="button" className={`p-chapter hide-compact ${settings === 'chapters' ? 'on' : ''}`} onClick={() => setSettings(settings === 'chapters' ? null : 'chapters')} aria-label="Chapters" data-tip="Chapters">· {chapterNow.title} <Icon name="chevron_right" size={18} /></button>}
+            {chapterNow && <button type="button" className={`p-chapter hide-compact ${settings === 'chapters' ? 'on' : ''}`} onClick={() => setSettings(settings === 'chapters' ? null : 'chapters')} aria-label="Chapters" data-tip="Chapters">{chapterNow.title} <Icon name="chevron_right" size={18} /></button>}
             <span className="grow" />
+            <div className="p-right-pill">
             {!compact && onAutoplayNext && (
               <span className="p-autoplay hide-mobile" data-tip={`Autoplay is ${autoplayNext ? 'on' : 'off'}`}>
                 <Switch label="Autoplay" on={!!autoplayNext} onChange={onAutoplayNext} />
@@ -532,6 +533,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             {onMini && <button type="button" className="p-btn hide-mobile" onClick={() => onMini(video.current?.currentTime ?? 0, !paused)} aria-label="Miniplayer (i)" data-tip="Miniplayer (i)"><Icon name="picture_in_picture_alt" size={26} /></button>}
             {onTheater && <button type="button" className="p-btn hide-mobile" onClick={onTheater} aria-label={theater ? 'Default view (t)' : 'Theater mode (t)'} data-tip={theater ? 'Default view (t)' : 'Theater mode (t)'}><Icon name={theater ? 'crop_landscape' : 'crop_16_9'} size={28} /></button>}
             <button type="button" className="p-btn" onClick={toggleFs} aria-label={fs ? 'Exit full screen (f)' : 'Full screen (f)'} data-tip={fs ? 'Exit full screen (f)' : 'Full screen (f)'}><Icon name={fs ? 'fullscreen_exit' : 'fullscreen'} size={30} /></button>
+            </div>
           </div>
         </div>
       </div>
