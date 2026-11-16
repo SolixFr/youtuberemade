@@ -395,7 +395,7 @@ img { display: block; }
 .shorts-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(210px, 45%), 1fr)); gap: 16px; }
 .short-card { cursor: pointer; min-width: 0; }
 .short-card-meta { display: flex; position: relative; padding: 12px 24px 0 0; }
-.short-card .v-title { font-size: 16px; }
+.short-card .v-title { font-size: 14px; line-height: 20px; }
 .short-card .more { top: 6px; right: -12px; }
 
 .compact { display: flex; gap: 8px; margin-bottom: 8px; position: relative; cursor: pointer; padding-right: 24px; }
@@ -763,12 +763,13 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .ch-live-chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 6px; display: inline-flex; align-items: center; gap: 5px; background: #cc0000; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; border-radius: 4px; padding: 3px 9px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .ch-info h1 { font-size: 36px; line-height: 50px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .ch-info h1 .verified { font-size: 20px !important; }
-.ch-line { color: var(--text-2); margin-top: 4px; }
+.ch-line { color: var(--text-2); font-size: 14px; line-height: 20px; margin-top: 4px; }
 .ch-line b { color: var(--text); font-weight: 500; }
-.ch-desc { color: var(--text-2); display: flex; align-items: center; gap: 4px; margin-top: 8px; cursor: pointer; max-width: 640px; }
+.ch-desc { color: var(--text-2); display: flex; align-items: center; gap: 4px; margin-top: 8px; cursor: pointer; max-width: 640px; font-size: 14px; line-height: 20px; }
 .ch-desc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-desc:hover { color: var(--text); }
-.ch-links { margin-top: 4px; font-size: 14px; }
+.ch-links { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 14px; line-height: 20px; }
+.ch-links .icon { color: var(--text-2); flex-shrink: 0; }
 .ch-links a { color: var(--blue); font-weight: 500; }
 .ch-buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; position: sticky; top: 56px; background: var(--bg); z-index: 40; }
