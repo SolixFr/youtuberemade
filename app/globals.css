@@ -600,6 +600,29 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .p-menu-row .switch { background: rgba(255, 255, 255, 0.3); }
 .p-menu-row .switch.on::after { background-color: #fff; }
 .p-menu-head { border-bottom: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 8px; height: 48px; gap: 8px; }
+/* ---------- "In this video" side panel ---------- */
+.p-panel { position: absolute; top: 12px; right: 12px; bottom: 64px; width: min(360px, calc(100% - 24px)); background: rgba(20, 20, 20, 0.96); border-radius: 12px; z-index: 7; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5); }
+.p-panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px 16px; }
+.p-panel-head h2 { font-size: 20px; line-height: 28px; font-weight: 700; flex: 1; }
+.p-panel-head .icon-btn { width: 40px; height: 40px; }
+.p-panel-chips { padding: 0 16px 8px; }
+.p-panel-chips .chip { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.p-panel-chips .chip.on { background: #fff; color: #0f0f0f; }
+.p-panel-chips .chip:focus { outline: none; }
+.p-panel-chips .chip:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.p-panel-body { flex: 1; overflow-y: auto; padding: 0 8px 12px; scrollbar-width: thin; }
+.p-ch-row { display: flex; gap: 12px; align-items: center; width: 100%; padding: 8px; border-radius: 8px; text-align: left; }
+.p-ch-row:hover { background: rgba(255, 255, 255, 0.1); }
+.p-ch-row.active { background: rgba(255, 255, 255, 0.14); }
+.p-ch-row img { width: 100px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #000; }
+.p-ch-thumb { width: 100px; aspect-ratio: 16 / 9; border-radius: 4px; flex-shrink: 0; background: rgba(255, 255, 255, 0.1); }
+.p-ch-row b { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.p-ch-time { font-size: 14px; color: #aaa; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.p-cue { display: flex; gap: 12px; width: 100%; padding: 8px; border-radius: 8px; text-align: left; font-size: 14px; line-height: 20px; }
+.p-cue:hover { background: rgba(255, 255, 255, 0.1); }
+.p-cue.active { background: rgba(255, 255, 255, 0.14); }
+.p-cue .link { color: var(--blue); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.p-panel-note { padding: 16px; color: #aaa; font-size: 14px; line-height: 20px; }
 .p-val { color: #ddd; }
 .p-check { width: 24px; display: inline-flex; flex: 0 !important; }
 .p-flash { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; pointer-events: none; animation: p-flash 0.5s ease-out forwards; }
