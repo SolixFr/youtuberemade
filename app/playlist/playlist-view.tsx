@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -44,7 +44,7 @@ export function PlaylistView({ playlist }: { playlist: PlaylistData }) {
           <h1>{playlist.title}</h1>
           <div className="pl-meta">
             <b>{playlist.owner}</b>
-            <span><Icon name={playlist.visibility === 'public' ? 'public' : playlist.visibility === 'unlisted' ? 'link' : 'lock'} size={14} className="inline-icon" /> {playlist.visibility[0].toUpperCase() + playlist.visibility.slice(1)} Â· {videos.length} video{videos.length === 1 ? '' : 's'}{playlist.updatedAt ? <> Â· Updated <Ago ts={playlist.updatedAt} /></> : ''}</span>
+            <span><Icon name={playlist.visibility === 'public' ? 'public' : playlist.visibility === 'unlisted' ? 'link' : 'lock'} size={14} className="inline-icon" /> {playlist.visibility[0].toUpperCase() + playlist.visibility.slice(1)} · {videos.length} video{videos.length === 1 ? '' : 's'}{playlist.updatedAt ? <> · Updated <Ago ts={playlist.updatedAt} /></> : ''}</span>
             {playlist.description && <span>{playlist.description}</span>}
           </div>
           <div className="pl-buttons">
@@ -68,7 +68,7 @@ export function PlaylistView({ playlist }: { playlist: PlaylistData }) {
             <Link href={`/watch?v=${v.id}&list=${playlist.id}`} onClick={(e) => e.stopPropagation()} tabIndex={-1}><Thumbnail v={v} actions={false} /></Link>
             <div className="pl-text">
               <h3 className="v-title">{v.title}</h3>
-              <div className="v-sub"><ChannelName channel={v.channel} /> Â· {formatCount(v.views)} views Â· <Ago ts={v.publishedAt} /></div>
+              <div className="v-sub"><ChannelName channel={v.channel} /> · {formatCount(v.views)} views · <Ago ts={v.publishedAt} /></div>
             </div>
             <VideoMenuButton v={v} extra={playlist.editable ? [{ icon: 'delete', label: `Remove from ${playlist.title}`, onSelect: async () => {
               setVideos((x) => x.filter((y) => y.id !== v.id));
