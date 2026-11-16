@@ -729,6 +729,9 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .short-channel { display: flex; align-items: center; gap: 8px; font-weight: 500; margin-bottom: 8px; }
 .short-channel .btn { height: 32px; padding: 0 12px; }
 .short-channel .btn-row { gap: 8px; }
+.short-owner-tools { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.short-tool { width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); color: #fff; display: inline-flex; align-items: center; justify-content: center; position: relative; }
+.short-tool:hover { background: rgba(255, 255, 255, 0.32); }
 .short-channel .btn-tonal { background: rgba(255, 255, 255, 0.2); color: #fff; }
 .short-channel .btn-filled { background: #fff; color: #0f0f0f; }
 .short-title { font-size: 16px; line-height: 22px; }

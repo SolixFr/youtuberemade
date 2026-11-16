@@ -67,7 +67,14 @@ function ShortSlot({ v, state, active, commentsOpen, onComments }: { v: Video; s
           <div className="short-channel">
             <Link href={`/${v.channel.handle}`}><Avatar channel={v.channel} size={36} /></Link>
             <Link href={`/${v.channel.handle}`}>{v.channel.handle}</Link>
-            {app.me?.id !== v.channel.id && <SubscribeButton channel={v.channel} initial={{ subscribed: state.subscribed, bell: state.bell }} size="sm" />}
+            {app.me?.id !== v.channel.id
+              ? <SubscribeButton channel={v.channel} initial={{ subscribed: state.subscribed, bell: state.bell }} size="sm" />
+              : (
+                <span className="short-owner-tools">
+                  <Link href="/studio/customization" className="short-tool" aria-label="Customize channel" data-tooltip="Customize channel"><Icon name="edit" size={20} /></Link>
+                  <Link href="/studio/content" className="short-tool" aria-label="Manage videos" data-tooltip="Manage videos"><Icon name="video_library" size={20} /></Link>
+                </span>
+              )}
           </div>
           <div className="short-title">{v.title}</div>
         </div>
