@@ -310,7 +310,7 @@ function useBadges(initial: { notifications: number; messages: number }, signedI
     if (!signedIn) return;
     const base = document.title.replace(/^\(\d+\+?\) /, '');
     document.title = counts.notifications > 0 ? `(${counts.notifications > 9 ? '9+' : counts.notifications}) ${base}` : base;
-  }, [signedIn, counts.notifications]);
+  }, [signedIn, counts.notifications, pathname]);
   return [counts, setCounts] as const;
 }
 
