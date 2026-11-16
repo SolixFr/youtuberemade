@@ -75,7 +75,13 @@ export default async function ChannelPage({ params, searchParams }: Props) {
       </>
     );
   } else if (tab === 'shorts') {
-    body = shorts.length ? <div className="shorts-row ch-grid">{shorts.map((v) => <ShortCard key={v.id} v={v} />)}</div> : <EmptyState icon="video_library" title="This channel doesn’t have any Shorts" />;
+    const sortedShorts = [...shorts].sort((a, b) => (sort === 'popular' ? b.views - a.views : sort === 'oldest' ? a.publishedAt - b.publishedAt : b.publishedAt - a.publishedAt));
+    body = (
+      <>
+        <RouteChips param="sort" fallback="latest" items={[{ id: 'latest', label: 'Latest' }, { id: 'popular', label: 'Popular' }, { id: 'oldest', label: 'Oldest' }]} />
+        {sortedShorts.length ? <div className="shorts-row ch-grid">{sortedShorts.map((v) => <ShortCard key={v.id} v={v} />)}</div> : <EmptyState icon="video_library" title="This channel doesn’t have any Shorts" />}
+      </>
+    );
   } else if (tab === 'playlists') {
     const lists = playlists(c.id, !mine);
     body = lists.length ? <div className="grid ch-grid">{lists.map((p) => <PlaylistTile key={p.id} p={p} />)}</div> : <EmptyState icon="playlist_play" title="This channel doesn’t have any playlists" />;
