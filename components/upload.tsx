@@ -52,10 +52,11 @@ export function probeVideo(url: string): Promise<Probe> {
 
 type UploadState = { status: 'uploading'; progress: number } | { status: 'done'; url: string } | { status: 'error'; message: string };
 
-export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () => void }) {
+export function UploadFlow({ short, onExit, chrome = 'dialog' }: { short?: boolean; onExit?: () => void; chrome?: 'dialog' | 'page' }) {
   const app = useApp();
   const toast = useToast();
   const router = useRouter();
+  const exit = onExit ?? (() => router.push('/studio/content'));
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [probe, setProbe] = useState<Probe | null>(null);
@@ -133,12 +134,27 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
 
   if (done) {
     const href = done.type === 'short' ? `/shorts/${done.id}` : `/watch?v=${done.id}`;
-    return (
-      <Dialog title={done.scheduled ? 'Video scheduled' : done.visibility === 'private' ? 'Video saved as private' : 'Video published'} onClose={onClose} width={440}
-        footer={(close) => <><Link className="btn btn-text btn-md" href="/studio/content" onClick={close}>Go to content</Link><Link className="btn btn-blue btn-md" href={href} onClick={close}>Watch</Link></>}>
+    const doneTitle = done.scheduled ? 'Video scheduled' : done.visibility === 'private' ? 'Video saved as private' : 'Video published';
+    const doneBody = (
+      <>
         <div className="thumb done-thumb">{done.thumb && <img src={done.thumb} alt="" />}<span className="duration">{formatDuration(done.duration)}</span></div>
         <p className="muted">{done.scheduled ? `It will go public on ${new Date(schedule).toLocaleString()}.` : done.visibility === 'unlisted' ? 'Only people with the link can watch it.' : done.visibility === 'private' ? 'Only you can see it.' : 'It’s now on your channel and in your subscribers’ feeds.'}</p>
         <CopyLink path={href} />
+      </>
+    );
+    if (chrome === 'page') {
+      return (
+        <section className="s-card upload-page-card">
+          <h2>{doneTitle}</h2>
+          {doneBody}
+          <div className="dialog-foot upload-page-foot"><Link className="btn btn-text btn-md" href="/studio/content">Go to content</Link><Link className="btn btn-blue btn-md" href={href}>Watch</Link></div>
+        </section>
+      );
+    }
+    return (
+      <Dialog title={doneTitle} onClose={exit} width={440}
+        footer={(close) => <><Link className="btn btn-text btn-md" href="/studio/content" onClick={close}>Go to content</Link><Link className="btn btn-blue btn-md" href={href} onClick={close}>Watch</Link></>}>
+        {doneBody}
       </Dialog>
     );
   }
@@ -150,15 +166,21 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
       const f = e.dataTransfer.files[0];
       if (f) void choose(f);
     };
+    const dropBody = (
+      <div className={`dropzone ${drag ? 'drag' : ''}`} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
+        <span className="drop-circle"><Icon name="upload" size={64} /></span>
+        <p className="drop-title">Drag and drop {short ? 'a vertical video' : 'a video file'} to upload</p>
+        <p className="muted">Your video stays private until you publish it.</p>
+        <label className="btn btn-filled btn-md">Select file<input type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(e) => e.target.files?.[0] && choose(e.target.files[0])} /></label>
+        <p className="muted small drop-note">MP4, MOV or WebM, up to 1 GB.</p>
+      </div>
+    );
+    if (chrome === 'page') {
+      return <section className="s-card upload-page-card">{dropBody}</section>;
+    }
     return (
-      <Dialog title={short ? 'Upload a Short' : 'Upload videos'} onClose={onClose} width={960} className="upload-dialog">
-        <div className={`dropzone ${drag ? 'drag' : ''}`} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
-          <span className="drop-circle"><Icon name="upload" size={64} /></span>
-          <p className="drop-title">Drag and drop {short ? 'a vertical video' : 'a video file'} to upload</p>
-          <p className="muted">Your video stays private until you publish it.</p>
-          <label className="btn btn-filled btn-md">Select file<input type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(e) => e.target.files?.[0] && choose(e.target.files[0])} /></label>
-          <p className="muted small drop-note">MP4, MOV or WebM, up to 1 GB.</p>
-        </div>
+      <Dialog title={short ? 'Upload a Short' : 'Upload videos'} onClose={exit} width={960} className="upload-dialog">
+        {dropBody}
       </Dialog>
     );
   }
@@ -168,21 +190,21 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
   const pct = upload?.status === 'uploading' ? Math.round(upload.progress * 100) : 100;
   const status = upload?.status === 'error' ? upload.message : upload?.status === 'done' ? (probe ? `Upload complete · ${formatDuration(probe.duration)}` : 'Upload complete · processing…') : `Uploading ${pct}%`;
 
-  return (
-    <Dialog title={title || 'Untitled'} onClose={onClose} width={960} className="upload-dialog" dismissable={false}
-      footer={(close) => (
-        <>
-          <div className="upload-status">
-            <span className={upload?.status === 'error' ? 'error' : ''}>{upload?.status === 'done' ? <CheckCircleIcon size={20} /> : <Icon name={upload?.status === 'error' ? 'error' : 'cloud_upload'} size={20} />}{status}</span>
-            <span className="progress"><i style={{ transform: `scaleX(${pct / 100})` }} /></span>
-          </div>
-          <Button variant="text" onClick={() => { handle.current?.abort(); close(); }}>Cancel</Button>
-          {step > 0 && <Button variant="text" onClick={() => setStep(0)}>Back</Button>}
-          {step === 0
-            ? <Button variant="filled" disabled={!title.trim() || kids === null || !probe} onClick={() => setStep(1)}>Next</Button>
-            : <Button variant="filled" disabled={saving || upload?.status === 'error'} onClick={publish}>{saving ? (upload?.status === 'uploading' ? `Waiting for upload… ${pct}%` : 'Saving…') : schedule ? 'Schedule' : visibility === 'private' ? 'Save' : 'Publish'}</Button>}
-        </>
-      )}>
+  const formFoot = (close: () => void) => (
+    <>
+      <div className="upload-status">
+        <span className={upload?.status === 'error' ? 'error' : ''}>{upload?.status === 'done' ? <CheckCircleIcon size={20} /> : <Icon name={upload?.status === 'error' ? 'error' : 'cloud_upload'} size={20} />}{status}</span>
+        <span className="progress"><i style={{ transform: `scaleX(${pct / 100})` }} /></span>
+      </div>
+      <Button variant="text" onClick={() => { handle.current?.abort(); close(); }}>Cancel</Button>
+      {step > 0 && <Button variant="text" onClick={() => setStep(0)}>Back</Button>}
+      {step === 0
+        ? <Button variant="filled" disabled={!title.trim() || kids === null || !probe} onClick={() => setStep(1)}>Next</Button>
+        : <Button variant="filled" disabled={saving || upload?.status === 'error'} onClick={publish}>{saving ? (upload?.status === 'uploading' ? `Waiting for upload… ${pct}%` : 'Saving…') : schedule ? 'Schedule' : visibility === 'private' ? 'Save' : 'Publish'}</Button>}
+    </>
+  );
+  const formBody = (
+    <>
       <ol className="steps">
         {['Details', 'Visibility'].map((s, i) => <li key={s} className={i === step ? 'on' : i < step ? 'done' : ''}><span className="step-dot">{i < step && <Icon name="check" size={16} />}</span>{s}</li>)}
       </ol>
@@ -259,8 +281,25 @@ export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () 
           </dl>
         </aside>
       </div>
+    </>
+  );
+  if (chrome === 'page') {
+    return (
+      <section className="s-card upload-page-card">
+        {formBody}
+        <div className="dialog-foot upload-page-foot">{formFoot(exit)}</div>
+      </section>
+    );
+  }
+  return (
+    <Dialog title={title || 'Untitled'} onClose={exit} width={960} className="upload-dialog" dismissable={false} footer={formFoot}>
+      {formBody}
     </Dialog>
   );
+}
+
+export function UploadDialog({ short, onClose }: { short?: boolean; onClose: () => void }) {
+  return <UploadFlow short={short} onExit={onClose} chrome="dialog" />;
 }
 
 function CopyLink({ path }: { path: string }) {

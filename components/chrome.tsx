@@ -145,7 +145,7 @@ function CreateMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => v
   const need = (fn: () => void) => () => app.requireAuth('Sign in to create content', fn);
   return (
     <Menu anchor={anchor} onClose={onClose} header={<div className="menu-title mobile-only">Create</div>} items={[
-      { icon: 'upload', label: 'Upload video', onSelect: need(() => app.open({ kind: 'upload' })) },
+      { icon: 'upload', label: 'Upload video', onSelect: need(() => router.push('/studio/upload')) },
       { icon: <ShortsIcon />, label: 'Create Short', onSelect: need(() => app.open({ kind: 'upload', short: true })) },
       { icon: 'sensors', label: 'Go live', onSelect: need(() => router.push('/studio/live')) },
       { icon: 'edit_note', label: 'Create post', onSelect: need(() => app.open({ kind: 'post' })) },

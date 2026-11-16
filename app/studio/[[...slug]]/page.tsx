@@ -17,6 +17,7 @@ import { AgreementsDialog, EarnNotify, EarnPanel, EarnTabs, LearningModule, Part
 import { earnTab } from './earn-shared';
 import { AnalyticsView } from './analytics-parts';
 import { ContentTable, CreateButtons, Customize, EditVideo, GoLive, SendFeedback, StudioComments, StudioStories, SubcountPanel, UploadButton } from './studio-parts';
+import { UploadFlow } from '@/components/upload';
 
 export const metadata = { title: 'Vidora Studio' };
 
@@ -638,6 +639,8 @@ export default async function StudioPage({ params, searchParams }: { params: Pro
   else if (section === 'subcount') {
     const recent = await recentSubscribers(6);
     body = <><h1>Live subscribers</h1><SubcountPanel initial={me.subscribers} recent={recent.ok ? recent.data : []} /></>;
+  } else if (section === 'upload') {
+    body = <><h1>Upload videos</h1><p className="muted subtitle">Select a file to upload — it stays private until you publish it.</p><UploadFlow chrome="page" /></>;
   }
   else notFound();
 
