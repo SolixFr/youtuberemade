@@ -45,9 +45,10 @@ export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
   const pick = (bell: BellLevel, msg: string) => { setState((s) => ({ ...s, bell })); void setBell(channel.id, bell); toast(msg); };
   return (
     <>
-      <button type="button" className={`btn btn-tonal btn-${size} subscribe-btn`} onClick={(e) => setAnchor(e.currentTarget)}>
-        <Icon name={bellIcon} size={size === 'sm' ? 20 : 24} /><span className="btn-label">Subscribed</span><Icon name="expand_more" size={20} className="trail" />
+      <button type="button" className={`btn btn-tonal btn-${size} subscribe-btn`} aria-label={`Unsubscribe from ${channel.name}`} onClick={(e) => setAnchor(e.currentTarget)}>
+        <span className="btn-label">Subscribed</span>
       </button>
+      <IconButton icon={bellIcon} label="Notification preferences" size={36} className="subscribe-bell" onClick={(e) => setAnchor(e.currentTarget)} />
       {anchor && (
         <Menu anchor={anchor} align="left" onClose={() => setAnchor(null)} items={[
           { icon: 'notifications_active', label: 'All', checked: state.bell === 'all', onSelect: () => pick('all', 'You’ll get all notifications') },

@@ -4,7 +4,7 @@
   font-style: normal;
   font-weight: 100 700;
   font-display: block;
-  src: url('/fonts/material-symbols-outlined-subset.woff2?v=f18266bab7') format('woff2');
+  src: url('/fonts/material-symbols-outlined-subset.woff2?v=d13235af60') format('woff2');
 }
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';
@@ -667,6 +667,8 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .w-buttons::-webkit-scrollbar { display: none; }
 .w-buttons .icon-btn { background: var(--tonal); }
 .w-buttons .icon-btn:hover:not(:disabled) { background: var(--tonal-hover); }
+.subscribe-bell { background: var(--tonal); }
+.subscribe-bell:hover:not(:disabled) { background: var(--tonal-hover); }
 .seg { display: inline-flex; border-radius: 18px; background: var(--tonal); box-shadow: var(--btn-shadow); flex-shrink: 0; height: 36px; }
 .seg button { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; font-weight: 500; height: 36px; border-radius: 18px 0 0 18px; transition: background 0.15s, transform 0.1s; position: relative; }
 .seg button:last-child { padding: 0 16px 0 12px; border-radius: 0 18px 18px 0; position: relative; }
@@ -685,13 +687,21 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .like-dot:nth-child(3n+1) { background: #ff8fa3; width: 3px; height: 3px; left: -1.5px; top: -1.5px; }
 @keyframes like-dot-fly { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); } }
 .subscribe-btn { margin-left: 0; }
-.description { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--tonal); cursor: pointer; font-size: 14px; line-height: 20px; }
+.description { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--tonal); cursor: pointer; font-size: 14px; line-height: 20px; position: relative; }
 .description:hover:not(.open) { background: var(--tonal-hover); }
 .description.open { cursor: default; }
 .desc-stats { font-weight: 500; display: flex; flex-wrap: wrap; gap: 0 8px; }
 .desc-body { white-space: pre-wrap; word-break: break-word; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .description.open .desc-body { display: block; }
 .desc-more { font-weight: 500; margin-top: 4px; display: inline-block; }
+.description:not(.open) .desc-more { position: absolute; right: 12px; bottom: 12px; margin: 0; background: linear-gradient(to right, transparent, var(--tonal) 40%); padding-left: 40px; }
+.desc-section { margin-top: 24px; }
+.desc-section h3 { font-size: 15px; line-height: 22px; font-weight: 500; margin: 0 0 8px; }
+.desc-details { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.desc-details li { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 20px; }
+.desc-details li .icon { color: var(--text-2); }
+.desc-details li span { color: var(--text-2); flex: 1; }
+.desc-details li b { font-weight: 500; }
 .ts-link, .hashtag { color: var(--blue); cursor: pointer; }
 .chapter-list { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .chapter-list::-webkit-scrollbar { display: none; }

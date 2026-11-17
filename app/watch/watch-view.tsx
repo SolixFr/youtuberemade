@@ -186,6 +186,21 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
           <Link className="btn btn-outline btn-md" href={`/${v.channel.handle}/videos`}><Icon name="smart_display" />Videos</Link>
         </div>
       )}
+      {descOpen && v.captions && (
+        <div className="desc-section"><h3>Transcript</h3>
+          <p className="muted">Follow along using the transcript.</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setPanelTab('transcript'); }}>Show transcript</button>
+        </div>
+      )}
+      {descOpen && (
+        <div className="desc-section"><h3>Video details</h3>
+          <ul className="desc-details">
+            <li><Icon name="calendar_month" size={16} /><span>Date</span><b>{formatDate(v.publishedAt)}</b></li>
+            <li><Icon name="smart_display" size={16} /><span>Views</span><b>{v.views.toLocaleString('en-US')}</b></li>
+            <li><Icon name="thumb_up" size={16} /><span>Likes</span><b>{likes.toLocaleString('en-US')}</b></li>
+          </ul>
+        </div>
+      )}
       <button type="button" className="desc-more" onClick={(e) => { e.stopPropagation(); setDescOpen(!descOpen); }}>{descOpen ? 'Show less' : '…more'}</button>
     </div>
   );
@@ -220,7 +235,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
             <div className="w-owner">
               <ChannelAvatar channel={v.channel} size={40} />
               <div className="w-owner-text">
-                <Link href={`/${v.channel.handle}`} className="w-owner-name ch-name">{v.channel.name}{(v.channel.verified || subs >= 50_000) && <VerifiedBadge />}</Link>
+                <Link href={`/${v.channel.handle}`} className="w-owner-name ch-name">{v.channel.name}{(v.channel.verified || subs >= 50_000) && <VerifiedBadge size={24} />}</Link>
                 <div className="w-owner-subs">{formatCount(subs)} subscribers</div>
               </div>
               <SubscribeButton channel={v.channel} initial={{ subscribed: state.subscribed, bell: state.bell }} onCount={setSubs} />
@@ -266,7 +281,7 @@ export function WatchView({ video: v, state, comments, related, playlist, startA
       <aside className="watch-secondary">
         {panelTab && chapters.length > 0 && (
           <div ref={panelRef as React.Ref<HTMLDivElement>}>
-            <ChapterPanel key={v.id} thumbnail={v.thumbnail} chapters={chapters} currentTime={nowT} seek={seekQuiet} captionsUrl={v.captions} initialTab={panelTab} onClose={() => setPanelTab(null)} />
+            <ChapterPanel key={`${v.id}-${panelTab}`} thumbnail={v.thumbnail} chapters={chapters} currentTime={nowT} seek={seekQuiet} captionsUrl={v.captions} initialTab={panelTab} onClose={() => setPanelTab(null)} />
           </div>
         )}
         {playlist && (
