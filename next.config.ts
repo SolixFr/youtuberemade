@@ -22,6 +22,7 @@ const csp = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: { agentUpgrade: 'security' },
   // My verification builds use a separate output dir so they never clobber the dev server's .next/
   ...(process.env.VIDORA_VERIFY_BUILD ? { distDir: '.next-verify' } : {}),
   turbopack: { root: fileURLToPath(new URL('.', import.meta.url)) },
