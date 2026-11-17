@@ -687,6 +687,7 @@ kbd { font-family: inherit; background: var(--tonal); border-radius: 4px; paddin
 .like-dot:nth-child(3n+1) { background: #ff8fa3; width: 3px; height: 3px; left: -1.5px; top: -1.5px; }
 @keyframes like-dot-fly { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); } }
 .subscribe-btn { margin-left: 0; }
+.subscribe-cluster { display: inline-flex; align-items: center; gap: 8px; }
 .description { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--tonal); cursor: pointer; font-size: 14px; line-height: 20px; position: relative; }
 .description:hover:not(.open) { background: var(--tonal-hover); }
 .description.open { cursor: default; }

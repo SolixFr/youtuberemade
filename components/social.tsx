@@ -44,7 +44,7 @@ export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
   const bellIcon = state.bell === 'all' ? 'notifications_active' : state.bell === 'none' ? 'notifications_off' : 'notifications';
   const pick = (bell: BellLevel, msg: string) => { setState((s) => ({ ...s, bell })); void setBell(channel.id, bell); toast(msg); };
   return (
-    <>
+    <span className="subscribe-cluster">
       <button type="button" className={`btn btn-tonal btn-${size} subscribe-btn`} aria-label={`Unsubscribe from ${channel.name}`} onClick={(e) => setAnchor(e.currentTarget)}>
         <span className="btn-label">Subscribed</span>
       </button>
@@ -58,7 +58,7 @@ export function SubscribeButton({ channel, initial, size = 'md', onCount }: {
         ]} />
       )}
       {confirm && <ConfirmDialog title={`Unsubscribe from ${channel.name}?`} text="You can subscribe again at any time." confirm="Unsubscribe" onClose={() => setConfirm(false)} onConfirm={() => change(false)} />}
-    </>
+    </span>
   );
 }
 
